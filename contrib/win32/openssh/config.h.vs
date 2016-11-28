@@ -1680,14 +1680,6 @@
 #define WIN32_ZLIB_NO 1
 #define USE_MSCNG 1
 
-#ifndef ssize_t
-#ifdef _WIN64
-typedef __int64		 ssize_t;
-#else
-typedef long ssize_t;
-#endif
-#endif
-
 #define HAVE_STRTOULL 1
 #define HAVE_USLEEP 1
 
