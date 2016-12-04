@@ -114,14 +114,6 @@
 #include "ssherr.h"
 #include "hostfile.h"
 
-#ifdef WIN32_FIXME
-// Windows Console screen size change related
-extern int ScreenX;
-extern int ScrollBottom;
-int win_received_window_change_signal = 1;
-
-#endif
-
 /* import options */
 extern Options options;
 
@@ -730,7 +722,6 @@ client_wait_until_can_do_something(fd_set **readsetp, fd_set **writesetp,
 static void
 client_suspend_self(Buffer *bin, Buffer *bout, Buffer *berr)
 {
-#ifndef WIN32_FIXME
 	/* Flush stdout and stderr buffers. */
 	if (buffer_len(bout) > 0)
 		atomicio(vwrite, fileno(stdout), buffer_ptr(bout),
@@ -761,7 +752,6 @@ client_suspend_self(Buffer *bin, Buffer *bout, Buffer *berr)
 	buffer_init(berr);
 
 	enter_raw_mode(options.request_tty == REQUEST_TTY_FORCE);
-#endif /* !WIN32_FIXME */
 }
 
 static void
@@ -1230,9 +1220,11 @@ process_escapes(Channel *c, Buffer *bin, Buffer *bout, Buffer *berr,
 				buffer_append(berr, string, strlen(string));
 				continue;
 
-#ifndef WIN32_FIXME//R
 			case '&':
-				if (c && c->ctl_chan != -1)
+#ifdef WINDOWS
+                                fatal("Background execution is not supported in Windows");
+#else
+                                if (c && c->ctl_chan != -1)
 					goto noescape;
 				/*
 				 * Detach the program (continue to serve
@@ -1282,8 +1274,7 @@ process_escapes(Channel *c, Buffer *bin, Buffer *bout, Buffer *berr,
 					}
 				}
 				continue;
-#endif /* !WIN32_FIXME */
-
+#endif /* !WINDOWS */
 			case '?':
 				print_escape_help(berr, escape_char, compat20,
 				    (c && c->ctl_chan != -1),
@@ -1333,14 +1324,6 @@ process_escapes(Channel *c, Buffer *bin, Buffer *bout, Buffer *berr,
 		 * and append it to the buffer.
 		 */
 		last_was_cr = (ch == '\r' || ch == '\n');
-		//#ifdef WIN32_FIXME
-		//extern int lftocrlf ; // defined in channels.c file's channel_input_data() function for now
-		//if ( (lftocrlf == 1) && ( ch == '\n') ) {
-			// add a \r before \n if sshd server sent us ESC[20h during initial tty mode setting
-			//buffer_put_char(bin, '\r');
-			//bytes++;
-		//}
-		//#endif
 		buffer_put_char(bin, ch);
 		bytes++;
 	}

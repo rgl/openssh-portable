@@ -169,7 +169,12 @@ int saved_argc;
 
 /* re-exec */
 int rexeced_flag = 0;
+#ifdef WINDOWS
+/* rexec is not supported in Windows */
+int rexec_flag = 0;
+#else
 int rexec_flag = 1;
+#endif
 int rexec_argc = 0;
 char **rexec_argv;
 
@@ -236,7 +241,12 @@ int *startup_pipes = NULL;
 int startup_pipe;		/* in child */
 
 /* variables used for privilege separation */
+#ifdef WINDOWS
+/* Windows does not use Unix privilege separation model */
+int use_prevsep = 0;
+#else
 int use_privsep = -1;
+#endif
 struct monitor *pmonitor = NULL;
 int privsep_is_preauth = 1;
 
@@ -277,8 +287,7 @@ static void do_ssh2_kex(void);
   {
     int exitCode = -1;
     
-    /* Windows */
-    #ifdef WINDOWS
+#ifdef WINDOWS
 
     char* dir = w32_programdir();
     if (strnlen(dir, pathSize) == pathSize) 
@@ -288,7 +297,7 @@ static void do_ssh2_kex(void);
         exitCode = 0;
     }
     
-    #endif
+#endif
     
     //
     // Linux.
@@ -488,17 +497,10 @@ sshd_exchange_identification(struct ssh *ssh, int sock_in, int sock_out)
 		minor = PROTOCOL_MINOR_1;
 	}
 
-	#ifndef WIN32_FIXME
 	xasprintf(&server_version_string, "SSH-%d.%d-%.100s%s%s%s",
 	    major, minor, SSH_VERSION,
 	    *options.version_addendum == '\0' ? "" : " ",
 	    options.version_addendum, newline);
-	#else
-	xasprintf(&server_version_string, "SSH-%d.%d-%.100s%s%s%s",
-	    major, minor, SSH_RELEASE,
-	    *options.version_addendum == '\0' ? "" : " ",
-	    options.version_addendum, newline);
-	#endif
 
 	/* Send our protocol version identification. */
 	if (atomicio(vwrite, sock_out, server_version_string,
@@ -551,10 +553,6 @@ sshd_exchange_identification(struct ssh *ssh, int sock_in, int sock_out)
 	}
 	debug("Client protocol version %d.%d; client software version %.100s",
 	    remote_major, remote_minor, remote_version);
-
-	#ifdef WIN32_FIXME
-	SetEnvironmentVariable("SSH_CLIENT_ID", remote_version);
-	#endif
 
 	if ((ssh->compat & SSH_BUG_PROBE) != 0) {
 		logit("probed from %s port %d with %s.  Don't panic.",
@@ -676,10 +674,32 @@ demote_sensitive_data(void)
 	/* We do not clear ssh1_host key and cookie.  XXX - Okay Niels? */
 }
 
+#ifdef WINDOWS
+/* 
+ * No-OP defs for preauth routines for Windows 
+ * these should go away once the privilege separation 
+ * related is refactored to be invoked only when applicable 
+ */
+static void
+privsep_preauth_child(void) {
+        return;
+}
+
+static int
+privsep_preauth(Authctxt *authctxt) {
+        return 0;
+}
+
+static void
+privsep_postauth(Authctxt *authctxt) {
+        return;
+}
+
+#else
+/* Unix privilege separation routines */
 static void
 privsep_preauth_child(void)
 {
-#ifndef WIN32_FIXME
 	u_int32_t rnd[256];
 	gid_t gidset[1];
 
@@ -720,13 +740,11 @@ privsep_preauth_child(void)
 		if (setgroups(1, gidset) < 0)
 			fatal("setgroups: %.100s", strerror(errno));
 		permanently_set_uid(privsep_pw);
-#endif
 }
 
 static int
 privsep_preauth(Authctxt *authctxt)
 {
-#ifndef WIN32_FIXME
 	int status, r;
 	pid_t pid;
 	struct ssh_sandbox *box = NULL;
@@ -794,21 +812,11 @@ privsep_preauth(Authctxt *authctxt)
 
 		return 0;
 	}
-#else
-
-  /*
-   * Not implemented on Win32.
-   */
-   
-  return 0;
-  
-#endif
 }
 
 static void
 privsep_postauth(Authctxt *authctxt)
 {
-#ifndef WIN32_FIXME
 	u_int32_t rnd[256];
 
 #ifdef DISABLE_FD_PASSING
@@ -865,8 +873,9 @@ privsep_postauth(Authctxt *authctxt)
 	 * this information is not part of the key state.
 	 */
 	packet_set_authenticated();
-#endif /* !WIN32_FIXME */
 }
+
+#endif 
 
 static char *
 list_hostkey_types(void)
@@ -1293,15 +1302,6 @@ server_listen(void)
 		/* Only communicate in IPv6 over AF_INET6 sockets. */
 		if (ai->ai_family == AF_INET6)
 			sock_set_v6only(listen_sock);
-    #ifdef WIN32_FIXME
-
-    /*
-     * Forbid inheriting of listen socket.
-     */
-		fcntl(listen_sock, F_SETFD, FD_CLOEXEC);
-    
-  
-    #endif
 
 		debug("Bind to port %s on %s.", strport, ntop);
 
@@ -1484,20 +1484,27 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 			 * parent continues listening.
 			 */
 			platform_pre_fork();
-      #ifdef WIN32_FIXME
-			{
+#ifdef WINDOWS
+                        /* 
+                         * fork() repleacement for Windows -
+                         * - Put accepted socket in a env varaibale
+                         * - disable inheritance on listening socket and startup fds
+                         * - Spawn child sshd.exe 
+                         */
+                        {
 				PROCESS_INFORMATION pi;
 				STARTUPINFO si;
 				BOOL b;
 				char path[MAX_PATH];
 
 				memset(&si, 0, sizeof(STARTUPINFO));
-
+                                pid = -1;
 				char remotesoc[64];
                                 snprintf(remotesoc, sizeof(remotesoc), "%p", sfd_to_handle(*newsock));
                                 SetEnvironmentVariable("SSHD_REMSOC", remotesoc);
                                 debug("Remote Handle %s", remotesoc);
 
+                                /*TODO - disable inheritance on listener and starup fds*/
 				si.cb = sizeof(STARTUPINFO);
 				si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
 				si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -1530,7 +1537,7 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 #else
 
 			if ((pid = fork()) == 0) {
-#endif /* else WIN32_FIXME */
+#endif
 				/*
 				 * Child.  Close the listening and
 				 * max_startup sockets.  Start using
@@ -1670,16 +1677,6 @@ main(int ac, char **av)
 	struct connection_info *connection_info = get_connection_info(0, 0);
 
 	ssh_malloc_init();	/* must be called before any mallocs */
-#ifdef WIN32_FIXME
-
-    /*
-     * Setup exit signal handler for receiving signal, when 
-     * parent server is stopped.
-     */
-  
-    AllocConsole();
-
-#endif /* WIN32_FIXME */
 
 #ifdef HAVE_SECUREWARE
 	(void)set_auth_parameters(ac, av);
@@ -1700,10 +1697,8 @@ main(int ac, char **av)
 	av = saved_argv;
 #endif
 
-#ifndef WIN32_FIXME
 	if (geteuid() == 0 && setgroups(0, NULL) == -1)
 		debug("setgroups(): %.200s", strerror(errno));
-#endif
 
 	/* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */
 	sanitise_stdfd();
@@ -1831,13 +1826,6 @@ main(int ac, char **av)
 			break;
 		}
 	}
-	
-  #ifdef WIN32_FIXME
-
-    rexec_flag = 0;
-    use_privsep = 0;
-
-  #endif /* WIN32_FIXME */
     
   {
     /*
@@ -1895,12 +1883,11 @@ main(int ac, char **av)
 		rexec_flag = 0;
 	if (!test_flag && (rexec_flag && (av[0] == NULL || *av[0] != '/')))
 		fatal("sshd re-exec requires execution with an absolute path");
-#ifndef WIN32_FIXME
+
 	if (rexeced_flag)
 		closefrom(REEXEC_MIN_FREE_FD);
 	else
 		closefrom(REEXEC_DEVCRYPTO_RESERVED_FD);
-#endif
 
 #ifdef WITH_OPENSSL
 	OpenSSL_add_all_algorithms();
@@ -1924,10 +1911,8 @@ main(int ac, char **av)
 	 * Unset KRB5CCNAME, otherwise the user's session may inherit it from
 	 * root's environment
 	 */
-#ifndef WIN32_FIXME
 	if (getenv("KRB5CCNAME") != NULL)
 		(void) unsetenv("KRB5CCNAME");
-#endif
 
 #ifdef _UNICOS
 	/* Cray can define user privs drop all privs now!
@@ -2020,10 +2005,6 @@ main(int ac, char **av)
 	    "without OpenSSL"
 #endif
 	);
-
-#ifdef WIN32_FIXME
-  logit("[Build " __DATE__ " " __TIME__ "]");
-#endif
 
 #ifndef WINDOWS
 	/* Store privilege separation user for later use if required. */
@@ -2197,7 +2178,6 @@ main(int ac, char **av)
 			fatal("Missing privilege separation directory: %s",
 			    _PATH_PRIVSEP_CHROOT_DIR);
 
-#ifndef WIN32_FIXME
 #ifdef HAVE_CYGWIN
 		if (check_ntsec(_PATH_PRIVSEP_CHROOT_DIR) &&
 		    (st.st_uid != getuid () ||
@@ -2207,7 +2187,6 @@ main(int ac, char **av)
 #endif
 			fatal("%s must be owned by root and not group or "
 			    "world-writable.", _PATH_PRIVSEP_CHROOT_DIR);
-#endif
 	}
 
 	if (test_flag > 1) {
@@ -2227,10 +2206,8 @@ main(int ac, char **av)
 	 * to create a file, and we can't control the code in every
 	 * module which might be used).
 	 */
-#ifndef WIN32_FIXME
 	if (setgroups(0, NULL) < 0)
 		debug("setgroups() failed: %.200s", strerror(errno));
-#endif
 
 	if (rexec_flag) {
 		rexec_argv = xcalloc(rexec_argc + 2, sizeof(char *));
@@ -2277,11 +2254,9 @@ main(int ac, char **av)
 
 	/* Chdir to the root directory so that the current disk can be
 	   unmounted if desired. */
-	#ifndef WIN32_FIXME
 	if (chdir("/") == -1)
 		error("chdir(\"/\"): %s", strerror(errno));
-	#endif
-
+	
 	/* ignore SIGPIPE */
 	signal(SIGPIPE, SIG_IGN);
 
@@ -2290,8 +2265,9 @@ main(int ac, char **av)
 		server_accept_inetd(&sock_in, &sock_out);
 	} else {
 		platform_pre_listen();
-#ifdef WIN32_FIXME
-        if (is_child == 0)
+#ifdef WINDOWS
+                /* For Windows child sshd, skip listener */
+                if (is_child == 0)
 #endif
 		server_listen();
 
@@ -2318,8 +2294,9 @@ main(int ac, char **av)
 				fclose(f);
 			}
 		}
-#ifdef WIN32_FIXME
-      
+
+#ifdef WINDOWS
+      /* Windows - for sshd child, pick up the accepted socket*/
       if (is_child) {      
 		char *stopstring;
 		DWORD_PTR remotesochandle;
@@ -2334,7 +2311,7 @@ main(int ac, char **av)
 
 		startup_pipe = -1;
       }
-	  else
+	  else /* Windows and Unix sshd parent */
 #endif
 
 		/* Accept a connection and return in a forked child */
@@ -2350,7 +2327,6 @@ main(int ac, char **av)
 	 * setlogin() affects the entire process group.  We don't
 	 * want the child to be able to affect the parent.
 	 */
-#ifndef WIN32_FIXME
 #if !defined(SSHD_ACQUIRES_CTTY)
 	/*
 	 * If setsid is called, on some platforms sshd will later acquire a
@@ -2360,10 +2336,8 @@ main(int ac, char **av)
 	if (!debug_flag && !inetd_flag && setsid() < 0)
 		error("setsid: %.100s", strerror(errno));
 #endif
-#endif
 
 	if (rexec_flag) {
-#ifndef WIN32_FIXME
 		int fd;
 
 		debug("rexec start in %d out %d newsock %d pipe %d sock %d",
@@ -2400,7 +2374,6 @@ main(int ac, char **av)
 		}
 		debug("rexec cleanup in %d out %d newsock %d pipe %d sock %d",
 		    sock_in, sock_out, newsock, startup_pipe, config_s[0]);
-#endif /* !WIN32_FIXME */
 	}
 
 	/* Executed child processes don't need these. */
@@ -2538,13 +2511,11 @@ main(int ac, char **av)
 #endif
 
 #ifdef GSSAPI
-#ifndef WIN32_FIXME
 	if (options.gss_authentication) {
 		temporarily_use_uid(authctxt->pw);
 		ssh_gssapi_storecreds();
 		restore_uid();
 	}
-#endif
 #endif
 #ifdef USE_PAM
 	if (options.use_pam) {
@@ -2928,7 +2899,6 @@ cleanup_exit(int i)
 {
 	if (the_authctxt) {
 		do_cleanup(the_authctxt);
-#ifndef WIN32_FIXME
 		if (use_privsep && privsep_is_preauth &&
 		    pmonitor != NULL && pmonitor->m_pid > 1) {
 			debug("Killing privsep child %d", pmonitor->m_pid);
@@ -2937,7 +2907,6 @@ cleanup_exit(int i)
 				error("%s: kill(%d): %s", __func__,
 				    pmonitor->m_pid, strerror(errno));
 		}
-#endif
 	}
 #ifdef SSH_AUDIT_EVENTS
 	/* done after do_cleanup so it can cancel the PAM auth 'thread' */

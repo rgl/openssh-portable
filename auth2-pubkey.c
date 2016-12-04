@@ -74,12 +74,8 @@ extern ServerOptions options;
 extern u_char *session_id2;
 extern u_int session_id2_len;
 
-#ifdef WIN32_FIXME
-  
-  extern char HomeDirLsaW[MAX_PATH];
-  extern int auth_sock;
-
-#endif
+/* used by WINDOWS */
+extern int auth_sock;
 
 
 static int
@@ -184,9 +180,9 @@ userauth_pubkey(Authctxt *authctxt)
 		/* test for correct signature */
 		authenticated = 0;
 
-#ifdef WIN32_FIXME
+#ifdef WINDOWS
+                /* In Windows, public key authentication (and token generation) is done by privileged ssh-agent */
 		{
-#define SSH_AGENT_ROOT "SOFTWARE\\SSH\\Agent"
 			int r;
 			u_char *blob = NULL;
 			size_t blen = 0;
@@ -226,9 +222,7 @@ userauth_pubkey(Authctxt *authctxt)
 				
 		}
 
-
-#else /* #ifdef WIN32_FIXME */
-
+#else 
 		if (PRIVSEP(user_key_allowed(authctxt->pw, key, 1)) &&
 		    PRIVSEP(key_verify(key, sig, slen, buffer_ptr(&b),
 		    buffer_len(&b))) == 1) {
@@ -239,7 +233,7 @@ userauth_pubkey(Authctxt *authctxt)
 		}
 		buffer_free(&b);
 		free(sig);
-   #endif /* else #ifdef WIN32_FIXME. */
+#endif 
 
 	} else {
 		debug("%s: test whether pkalg/pkblob are acceptable for %s %s",
@@ -458,7 +452,10 @@ static pid_t
 subprocess(const char *tag, struct passwd *pw, const char *command,
     int ac, char **av, FILE **child)
 {
-#ifndef WIN32_FIXME
+#ifdef WINDOWS
+        logit("AuthorizedPrincipalsCommand and AuthorizedKeysCommand are not supported in Windows");
+        return 0;
+#else
 	FILE *f;
 	struct stat st;
 	int devnull, p[2], i;
@@ -578,8 +575,6 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 	debug3("%s: %s pid %ld", __func__, tag, (long)pid);
 	*child = f;
 	return pid;
-#else
-	return 0;
 #endif
 }
 
@@ -587,8 +582,6 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 static int
 exited_cleanly(pid_t pid, const char *tag, const char *cmd)
 {
-#ifndef WIN32_FIXME
-// PRAGMA: TODO
 	int status;
 
 	while (waitpid(pid, &status, 0) == -1) {
@@ -605,9 +598,6 @@ exited_cleanly(pid_t pid, const char *tag, const char *cmd)
 		return -1;
 	}
 	return 0;
-#else
-	return 0;
-#endif
 }
 
 static int
@@ -723,10 +713,7 @@ match_principals_command(struct passwd *user_pw, struct sshkey_cert *cert)
 	 * NB. all returns later this function should go via "out" to
 	 * ensure the original SIGCHLD handler is restored properly.
 	 */
-#ifndef WIN32_FIXME
-// PRAGMA:TODO
 	osigchld = signal(SIGCHLD, SIG_DFL);
-#endif
 
 	/* Prepare and verify the user for the command */
 	username = percent_expand(options.authorized_principals_command_user,
@@ -1019,11 +1006,9 @@ user_key_command_allowed2(struct passwd *user_pw, Key *key)
 	 * NB. all returns later this function should go via "out" to
 	 * ensure the original SIGCHLD handler is restored properly.
 	 */
-	#ifndef WIN32_FIXME
-	//PRAGMA:TODO
 	osigchld = signal(SIGCHLD, SIG_DFL);
-	#endif
-	/* Prepare and verify the user for the command */
+
+        /* Prepare and verify the user for the command */
 	username = percent_expand(options.authorized_keys_command_user,
 	    "u", user_pw->pw_name, (char *)NULL);
 	pw = getpwnam(username);

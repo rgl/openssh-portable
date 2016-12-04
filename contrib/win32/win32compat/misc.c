@@ -1,13 +1,76 @@
+/*
+* Author: Manoj Ampalam <manoj.ampalam@microsoft.com>
+*
+* Copyright(c) 2016 Microsoft Corp.
+* All rights reserved
+*
+* Misc Unix POSIX routine implementations for Windows
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions
+* are met :
+*
+* 1. Redistributions of source code must retain the above copyright
+* notice, this list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright
+* notice, this list of conditions and the following disclaimer in the
+* documentation and / or other materials provided with the distribution.
+*
+* THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+* IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+* OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES(INCLUDING, BUT
+* NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+* DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+* THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+* THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #include <Windows.h>
 #include <stdio.h>
 #include "inc\defs.h"
 #include "inc\sys\statvfs.h"
 #include "inc\sys\time.h"
+#include <time.h>
 
 int usleep(unsigned int useconds)
 {
 	Sleep(useconds / 1000);
 	return 1;
+}
+
+int nanosleep(const struct timespec *req, struct timespec *rem) {
+        HANDLE timer;
+        LARGE_INTEGER li;
+
+        if (req->tv_sec < 0 || req->tv_nsec < 0 || req->tv_nsec > 999999999) {
+                errno = EINVAL;
+                return -1;
+        }
+
+        if ((timer = CreateWaitableTimerW(NULL, TRUE, NULL)) == NULL) {
+                errno = EFAULT;
+                return -1;
+        }
+
+        li.QuadPart = -req->tv_nsec;
+        if (!SetWaitableTimer(timer, &li, 0, NULL, NULL, FALSE)) {
+                CloseHandle(timer);
+                errno = EFAULT;
+                return -1;
+        }
+        
+        /* TODO - use wait_for_any_event, since we want to wake up on interrupts*/
+        switch (WaitForSingleObject(timer, INFINITE)) {
+        case WAIT_OBJECT_0:
+                CloseHandle(timer);
+                return 0;
+        default:
+                errno = EFAULT;
+                return -1;
+        }
 }
 
 /* Difference in us between UNIX Epoch and Win32 Epoch */

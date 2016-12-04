@@ -201,7 +201,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="$(OpenSSH-Src-Path)\auth.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)\groupaccess.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\servconf.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\ssh-agent\agent-main.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\ssh-agent\agent.c" />

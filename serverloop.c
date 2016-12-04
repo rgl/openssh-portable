@@ -492,7 +492,9 @@ process_output(fd_set *writeset)
 			fdin = -1;
 		} else {
 			/* Successful write. */
-#ifndef WIN32_FIXME
+#ifdef WINDOWS
+                        /* TODO - implement below logic for Windows */
+#else
 			if (fdin_is_tty && dlen >= 1 && data[0] != '\r' &&
 			    tcgetattr(fdin, &tio) == 0 &&
 			    !(tio.c_lflag & ECHO) && (tio.c_lflag & ICANON)) {
@@ -884,16 +886,6 @@ server_loop2(Authctxt *authctxt)
 	free(readset);
 	free(writeset);
 	
-
-  /*
-   * Wait until all output has been sent to the client.
-   */
-  
-  #ifdef WIN32_FIXME
-  
-  drain_output();
-  
-  #endif
 
 	/* free all channels, no more reads and writes */
 	channel_free_all();

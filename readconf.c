@@ -469,11 +469,10 @@ default_ssh_port(void)
 static int
 execute_in_shell(const char *cmd)
 {
-	#ifdef WIN32_FIXME
-	// PRAGMA:TODO
-	logit("==>> execute_in_shell()");
+#ifdef WINDOWS
+	fatal("LocalCommand execution is not supported on Windows");
 	return 0;
-	#else
+#else
 	char *shell, *command_string;
 	pid_t pid;
 	int devnull, status;
@@ -532,7 +531,7 @@ execute_in_shell(const char *cmd)
 	}
 	debug3("command returned status %d", WEXITSTATUS(status));
 	return WEXITSTATUS(status);
-	#endif
+#endif
 }
 
 /*

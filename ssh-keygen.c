@@ -1193,14 +1193,8 @@ known_hosts_find_delete(struct hostkey_foreach_line *l, void *_ctx)
 static void
 do_known_hosts(struct passwd *pw, const char *name)
 {
-#ifdef WIN32_FIXME
-  
-  /*
-   * Not implemented on Win32 yet.
-   */
-   
-  fatal("Unimplemented");
-
+#ifdef WINDOWS
+        fatal("Updating known_hosts is not supported in Windows yet.");
 #else
 	  
 	char *cp, tmp[PATH_MAX], old[PATH_MAX];
@@ -1294,7 +1288,7 @@ do_known_hosts(struct passwd *pw, const char *name)
 	}
 
 	exit (find_host && !ctx.found_key);
-#endif /* else WIN32_FIXME */
+#endif 
 }
 
 /*
@@ -2301,18 +2295,7 @@ main(int argc, char **argv)
 	if (!pw)
 		fatal("No user exists for uid %lu", (u_long)getuid());
 	if (gethostname(hostname, sizeof(hostname)) < 0) {
-#ifdef WIN32_FIXME
-    
-    DWORD local_len = sizeof(hostname);
-    
-    if (!GetComputerNameA(hostname, &local_len))
-    {
-  
-  #endif		
 		fatal("gethostname: %s", strerror(errno));
-	#ifdef WIN32_FIXME
-    }
-  #endif
 	}
 	/* Remaining characters: UYdw */
 	while ((opt = getopt(argc, argv, "ABHLQXceghiklopquvxy"
@@ -2673,15 +2656,7 @@ main(int argc, char **argv)
 				error("Could not create directory '%s': %s",
 				    dotsshdir, strerror(errno));
 			} else if (!quiet)
-#ifdef WIN32_FIXME
-      {
-        SetFileAttributes(dotsshdir, FILE_ATTRIBUTE_HIDDEN);
-        
-        printf("Created directory '%s'.\n", dotsshdir);
-      }
-#else
-				printf("Created directory '%s'.\n", dotsshdir);
-#endif
+        			printf("Created directory '%s'.\n", dotsshdir);
 		}
 	}
 	/* If the file already exists, ask the user to confirm. */

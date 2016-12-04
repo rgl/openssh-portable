@@ -1746,10 +1746,6 @@ ssh_session(void)
 		cp = getenv("TERM");
 		if (!cp)
 			cp = "";
-#ifdef WIN32_FIXME
-        if (cp != NULL && _stricmp(cp, "passthru") == 0)
-            cp = "ansi";
-#endif
 		packet_put_cstring(cp);
 
 		/* Store window size in the packet. */
@@ -1907,18 +1903,8 @@ ssh_session2_setup(int id, int success, void *arg)
 	packet_set_interactive(interactive,
 	    options.ip_qos_interactive, options.ip_qos_bulk);
 
-#ifdef WIN32_FIXME
-    char *term = getenv("TERM");
-
-    if (term != NULL && _stricmp(term, "passthru") == 0)
-        term = "ansi";
-
-	client_session2_setup(id, tty_flag, subsystem_flag, term,
-	    NULL, fileno(stdin), &command, environ);
-#else
 	client_session2_setup(id, tty_flag, subsystem_flag, getenv("TERM"),
 	    NULL, fileno(stdin), &command, environ);
-#endif
 }
 
 /* open new channel for a session */

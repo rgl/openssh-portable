@@ -40,10 +40,25 @@
 #include "inc\utf.h"
 
 static struct passwd pw;
-static char* pw_shellpath = "ssh-shellhost.exe";
+static char* pw_shellpath = NULL;
+#define SHELL_HOST "\\ssh-shellhost.exe"
+
+char* w32_programdir();
 
 int
 initialize_pw() {
+        if (pw_shellpath == NULL) {
+                if ((pw_shellpath = malloc(strlen(w32_programdir()) + strlen(SHELL_HOST) + 1)) == NULL)
+                        fatal("initialize_pw - out of memory");
+                else {
+                        char* head = pw_shellpath;
+                        memcpy(head, w32_programdir(), strlen(w32_programdir()));
+                        head += strlen(w32_programdir());
+                        memcpy(head, SHELL_HOST, strlen(SHELL_HOST));
+                        head += strlen(SHELL_HOST);
+                        *head = '\0';
+                }
+        }
         if (pw.pw_shell != pw_shellpath) {
                 memset(&pw, 0, sizeof(pw));
                 pw.pw_shell = pw_shellpath;

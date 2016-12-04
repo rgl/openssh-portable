@@ -1567,7 +1567,10 @@ static int
 ssh_keysign(struct sshkey *key, u_char **sigp, size_t *lenp,
     const u_char *data, size_t datalen)
 {
-#ifndef WIN32_FIXME
+#ifdef WINDOWS
+        fatal("keysign is not supported in Windows");
+        return -1;
+#else
 	struct sshbuf *b;
 	struct stat st;
 	pid_t pid;
@@ -1677,9 +1680,6 @@ ssh_keysign(struct sshkey *key, u_char **sigp, size_t *lenp,
 	sshbuf_free(b);
 
 	return 0;
-#else
-	fatal("keysign is not supported in Windows");
-	return -1;
 #endif
 }
 

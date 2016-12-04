@@ -237,7 +237,9 @@ long long strtonum(const char *, long long, long long, const char **);
 # define wcwidth(x)	(((x) >= 0x20 && (x) <= 0x7e) ? 1 : -1)
 /* force our no-op nl_langinfo and mbtowc */
 # undef HAVE_NL_LANGINFO
+#ifndef WINDOWS
 # undef HAVE_MBTOWC
+#endif
 # undef HAVE_LANGINFO_H
 #endif
 
@@ -245,10 +247,8 @@ long long strtonum(const char *, long long, long long, const char **);
 # define nl_langinfo(x)	""
 #endif
 
-#ifndef WINDOWS
 #ifndef HAVE_MBTOWC
 int mbtowc(wchar_t *, const char*, size_t);
-#endif
 #endif
 
 #if !defined(HAVE_VASPRINTF) || !defined(HAVE_VSNPRINTF)

@@ -1762,8 +1762,9 @@ channel_handle_wfd(Channel *c, fd_set *readset, fd_set *writeset)
 		if (compat20 && c->wfd_isatty)
 			dlen = MIN(dlen, 8*1024);
 #endif
-#ifdef WIN32_FIXME /* TODO - Fix this - on windows we somehow end up with dlen = 0*/
-		if (dlen > 0) {
+#ifdef WINDOWS /* TODO - Fix this - on windows sometimes dlen ends up as 0. Putting this assert to catch it*/
+		if (dlen <= 0)
+			DebugBreak();
 #endif
 
 		len = write(c->wfd, buf, dlen);
@@ -1784,7 +1785,6 @@ channel_handle_wfd(Channel *c, fd_set *readset, fd_set *writeset)
 			}
 			return -1;
 		}
-#ifndef WIN32_FIXME//R
 #ifndef BROKEN_TCGETATTR_ICANON
 		if (compat20 && c->isatty && dlen >= 1 && buf[0] != '\r') {
 			if (tcgetattr(c->wfd, &tio) == 0 &&
@@ -1800,12 +1800,8 @@ channel_handle_wfd(Channel *c, fd_set *readset, fd_set *writeset)
 			}
 		}
 #endif
-#endif
 		buffer_consume(&c->output, len);
 	}
-#ifdef WIN32_FIXME /* for if (dlen > 0) */
-	}
-#endif
  out:
 	if (compat20 && olen > 0)
 		c->local_consumed += olen - buffer_len(&c->output);
@@ -3883,9 +3879,7 @@ channel_send_window_changes(void)
 		if (channels[i] == NULL || !channels[i]->client_tty ||
 		    channels[i]->type != SSH_CHANNEL_OPEN)
 			continue;
-#ifndef WIN32_FIXME
-                /* TODO - Fix this for multiple channels*/
-#endif
+
                 if (ioctl(channels[i]->rfd, TIOCGWINSZ, &ws) < 0)
                         continue;
 

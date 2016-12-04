@@ -95,25 +95,6 @@
 #include "kex.h"
 #include "monitor_wrap.h"
 #include "sftp.h"
-#ifdef WIN32_FIXME
-#include "console.h"
-#include <Sddl.h>
-#endif
-
-#ifdef WIN32_FIXME
-
-/*
-FIXME: GFPZR: Function stat() may be undeclared.
-*/
-#include <sys/stat.h>
-#include <winbase.h>
-
-#include <Userenv.h>
-#include <shlobj.h>
-
-extern char HomeDirLsaW[MAX_PATH];
-
-#endif
 
 #if defined(KRB5) && defined(USE_AFS)
 #include <kafs.h>
@@ -186,44 +167,6 @@ static int in_chroot = 0;
 static char *auth_sock_name = NULL;
 static char *auth_sock_dir = NULL;
 
-#ifdef WIN32_FIXME
-Session *session_get(int *index)
-{
-  Session *session;
-
-  if (!index)
-  {
-    return NULL;
-  }  
-  
-  if (*index >= sessions_nalloc)
-  {
-    *index = -1;
-    return NULL;
-  }
-
-  /* 
-   * If not used, return next index 
-   */
-  
-  if (!sessions[*index].used) 
-  {
-    (*index)++;
-    return NULL;
-  }
-
-  /*
-   * If used, return session and next index 
-   */
-  
-  session = &sessions[*index];
-  
-  (*index)++;
-  return session;
-}
-
-#endif /* WIN32_FIXME */
-
 /* removes the agent forwarding socket */
 
 static void
@@ -241,7 +184,10 @@ auth_sock_cleanup_proc(struct passwd *pw)
 static int
 auth_input_request_forwarding(struct passwd * pw)
 {
-#ifndef WIN32_FIXME
+#ifdef WINDOWS
+        packet_send_debug("Agent forwarding not supported yet in Windows");
+        return 0;
+#else
 	Channel *nc;
 	int sock = -1;
 
@@ -297,8 +243,6 @@ auth_input_request_forwarding(struct passwd * pw)
 		close(sock);
 	auth_sock_name = NULL;
 	auth_sock_dir = NULL;
-	return 0;
-#else
 	return 0;
 #endif
 }
@@ -510,6 +454,8 @@ do_authenticated1(Authctxt *authctxt)
 }
 
 #ifdef WINDOWS
+#include <Shlobj.h>
+#include <Sddl.h>
 
 #define SET_USER_ENV(folder_id, evn_variable) do  {                \
        if (SHGetKnownFolderPath(&folder_id,0,token,&path) == S_OK)              \
@@ -1801,7 +1747,6 @@ do_setup_env(Session *s, const char *shell)
 static void
 do_rc_files(Session *s, const char *shell)
 {
-#ifndef WIN32_FIXME
 	FILE *f = NULL;
 	char cmd[1024];
 	int do_xauth;
@@ -1866,7 +1811,6 @@ do_rc_files(Session *s, const char *shell)
 			    cmd);
 		}
 	}
-#endif
 }
 
 static void
@@ -1960,7 +1904,6 @@ safely_chroot(const char *path, uid_t uid)
 void
 do_setusercontext(struct passwd *pw)
 {
-#ifndef WIN32_FIXME
 	char *chroot_path, *tmp;
 #ifdef USE_LIBIAF
 	int doing_chroot = 0;
@@ -2040,13 +1983,11 @@ do_setusercontext(struct passwd *pw)
 
 	if (getuid() != pw->pw_uid || geteuid() != pw->pw_uid)
 		fatal("Failed to set uids to %u.", (u_int) pw->pw_uid);
-#endif /* !WIN32_FIXME */
 }
 
 static void
 do_pwchange(Session *s)
 {
-#ifndef WIN32_FIXME
 	fflush(NULL);
 	fprintf(stderr, "WARNING: Your password has expired.\n");
 	if (s->ttyfd != -1) {
@@ -2067,13 +2008,11 @@ do_pwchange(Session *s)
 		    "Password change required but no TTY available.\n");
 	}
 	exit(1);
-#endif /* !WIN32_FIXME */
 }
 
 static void
 launch_login(struct passwd *pw, const char *hostname)
 {
-#ifndef WIN32_FIXME
 	/* Launch login(1). */
 
 	execl(LOGIN_PROGRAM, "login", "-h", hostname,
@@ -2090,13 +2029,11 @@ launch_login(struct passwd *pw, const char *hostname)
 
 	perror("login");
 	exit(1);
-#endif /* !WIN32_FIXME */
 }
 
 static void
 child_close_fds(void)
 {
-#ifndef WIN32_FIXME
 	extern int auth_sock;
 
 	if (auth_sock != -1) {
@@ -2130,7 +2067,6 @@ child_close_fds(void)
 	 * descriptors open.
 	 */
 	closefrom(STDERR_FILENO + 1);
-#endif /* !WIN32_FIXME */
 }
 
 /*
@@ -2142,7 +2078,10 @@ child_close_fds(void)
 void
 do_child(Session *s, const char *command)
 {
-#ifndef WIN32_FIXME
+#ifdef WINDOWS
+        /*not called for Windows */
+        return;
+#else
 	extern char **environ;
 	char **env;
 	char *argv[ARGV_MAX];
@@ -2359,7 +2298,7 @@ do_child(Session *s, const char *command)
 	execve(shell, argv, env);
 	perror(shell);
 	exit(1);
-#endif /* !WIN32_FIXME */
+#endif
 }
 
 void
@@ -2831,33 +2770,9 @@ session_pty_cleanup2(Session *s)
 		error("session_pty_cleanup: no session");
 		return;
 	}
-#ifndef WIN32_FIXME
   
 	if (s->ttyfd == -1)
 		return;
-
-  #endif
-
-  #ifdef WIN32_FIXME
-   /*
-   * Send exit signal to child 'cmd.exe' process.
-   */
-  
-  if (s -> pid != 0)
-  {
-
-    debug("Sending exit signal to child process [pid = %u]...", s -> pid);
-
-    //if (!GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, s -> processId))
-    //{
-    //  debug("ERROR. Cannot send signal to process.");
-    //}
-
-    kill(s->pid, SIGTERM);
-    
-  }
- 
-  #endif
 
 	debug("session_pty_cleanup: session %d release %s", s->self, s->tty);
 
@@ -2891,7 +2806,6 @@ session_pty_cleanup(Session *s)
 static char *
 sig2name(int sig)
 {
-#ifndef WIN32_FIXME
 #define SSH_SIG(x) if (sig == SIG ## x) return #x
 	SSH_SIG(ABRT);
 	SSH_SIG(ALRM);
@@ -2907,7 +2821,6 @@ sig2name(int sig)
 	SSH_SIG(USR1);
 	SSH_SIG(USR2);
 #undef	SSH_SIG
-#endif
 	return "SIG@openssh.com";
 }
 
@@ -2932,45 +2845,6 @@ session_close_single_x11(int id, void *arg)
 {
 	Session *s;
 	u_int i;
-  #ifdef WIN32_FIXME
-  
-  /*
-   * Send exit signal to child 'cmd.exe' process.
-   */
-  
-    if (s && s -> pid != 0)
-    {
-      debug("Sending exit signal to child process [pid = %u]...", s -> pid);
-
-      //if (!GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, s -> processId))
-      //{
-      //  debug("ERROR. Cannot send signal to process.");
-      //}  
-      kill(s->pid, SIGTERM);
-      /*
-       * Try wait 100 ms until child finished.
-       */
-
-      if (WaitForSingleObject(s -> pid, 100) == WAIT_TIMEOUT)
-      {
-        /* 
-         * If still not closed, kill 'cmd.exe' process.
-         */
-    
-        if (TerminateProcess(s -> pid, 1) == TRUE)
-        {
-          debug("Process %u terminated.", s -> pid);
-        }
-        else
-        {
-          debug("ERROR. Cannot terminate %u process.", s -> pid);
-        } 
-      }
-    
-      CloseHandle(s -> pid);
-    }
-  
-  #endif
 
 	debug3("session_close_single_x11: channel %d", id);
 	channel_cancel_cleanup(id);
@@ -3245,11 +3119,7 @@ session_setup_x11fwd(Session *s)
 		snprintf(auth_display, sizeof auth_display, "unix:%u.%u",
 		    s->display_number, s->screen);
 		s->display = xstrdup(display);
-#ifdef WIN32_FIXME
-		s->display = xstrdup(display);
-#else
 		s->auth_display = xstrdup(auth_display);
-#endif
 	} else {
 #ifdef IPADDR_IN_DISPLAY
 		struct hostent *he;

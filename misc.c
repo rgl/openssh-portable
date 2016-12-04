@@ -808,7 +808,10 @@ tun_open(int tun, int mode)
 void
 sanitise_stdfd(void)
 {
-#ifndef WIN32_FIXME
+#ifdef WINDOWS
+	/* nothing to do for Windows*/
+	return;
+#else
 	int nullfd, dupfd;
 
 	if ((nullfd = dupfd = open(_PATH_DEVNULL, O_RDWR)) == -1) {
@@ -1037,7 +1040,6 @@ bandwidth_limit_init(struct bwlimit *bw, u_int64_t kbps, size_t buflen)
 void
 bandwidth_limit(struct bwlimit *bw, size_t read_len)
 {
-#ifndef WIN32_FIXME
 	u_int64_t waitlen;
 	struct timespec ts, rm;
 
@@ -1085,7 +1087,6 @@ bandwidth_limit(struct bwlimit *bw, size_t read_len)
 
 	bw->lamt = 0;
 	gettimeofday(&bw->bwstart, NULL);
-#endif
 }
 
 /* Make a template filename for mk[sd]temp() */

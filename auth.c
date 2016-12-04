@@ -173,7 +173,6 @@ allowed_user(struct passwd * pw)
 			free(shell);
 			return 0;
 		}
-#ifndef WIN32_FIXME//R
 		if (S_ISREG(st.st_mode) == 0 ||
 		    (st.st_mode & (S_IXOTH|S_IXUSR|S_IXGRP)) == 0) {
 			logit("User %.100s not allowed because shell %.100s "
@@ -181,7 +180,6 @@ allowed_user(struct passwd * pw)
 			free(shell);
 			return 0;
 		}
-#endif
 		free(shell);
 	}
 
@@ -482,7 +480,10 @@ int
 auth_secure_path(const char *name, struct stat *stp, const char *pw_dir,
     uid_t uid, char *err, size_t errlen)
 {
-#ifndef WIN32_FIXME
+#ifdef WINDOWS
+        error("auth_secure_path should not be called in Windows");
+        return -1;
+#else
 	char buf[PATH_MAX], homedir[PATH_MAX];
 	char *cp;
 	int comparehome = 0;
@@ -535,8 +536,6 @@ auth_secure_path(const char *name, struct stat *stp, const char *pw_dir,
 			break;
 	}
 	return 0;
-#else
-  return 0;
 #endif 
 }
 
@@ -550,7 +549,6 @@ static int
 secure_filename(FILE *f, const char *file, struct passwd *pw,
     char *err, size_t errlen)
 {
-#ifndef WIN32_FIXME
 	struct stat st;
 
 	/* check the open file to avoid races */
@@ -560,9 +558,6 @@ secure_filename(FILE *f, const char *file, struct passwd *pw,
 		return -1;
 	}
 	return auth_secure_path(file, &st, pw->pw_dir, pw->pw_uid, err, errlen);
-#else
-  return 0;
-#endif 
 }
 
 static FILE *
@@ -574,9 +569,14 @@ auth_openfile(const char *file, struct passwd *pw, int strict_modes,
 	int fd;
 	FILE *f;
 	
-#ifdef WIN32_FIXME
-	if ((f = fopen(file, "r")) == NULL)
-		return NULL;
+#ifdef WINDOWS
+        /* Windows POSIX adpater does not support fdopen() on open(file)*/
+        if ((f = fopen(file, "r")) == NULL) {
+                debug("Could not open %s '%s': %s", file_type, file,
+                        strerror(errno));
+                return NULL;
+        }
+        /* TODO check permissions  */
 #else
 	if ((fd = open(file, O_RDONLY|O_NONBLOCK)) == -1) {
 		if (log_missing || errno != ENOENT)
@@ -600,7 +600,6 @@ auth_openfile(const char *file, struct passwd *pw, int strict_modes,
 		close(fd);
 		return NULL;
 	}
-#endif
 	if (strict_modes &&
 	    secure_filename(f, file, pw, line, sizeof(line)) != 0) {
 		fclose(f);
@@ -608,7 +607,7 @@ auth_openfile(const char *file, struct passwd *pw, int strict_modes,
 		auth_debug_add("Ignored %s: %s", file_type, line);
 		return NULL;
 	}
-
+#endif
 	return f;
 }
 

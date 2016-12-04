@@ -80,7 +80,7 @@
 /* #undef BROKEN_SNPRINTF */
 
 /* tcgetattr with ICANON may hang */
-/* #undef BROKEN_TCGETATTR_ICANON */
+#define BROKEN_TCGETATTR_ICANON 1
 
 /* updwtmpx is broken (if present) */
 /* #undef BROKEN_UPDWTMPX */
@@ -859,7 +859,7 @@
 /* #undef HAVE_SETRLIMIT */
 
 /* Define to 1 if you have the `setsid' function. */
-/* #undef HAVE_SETSID */
+#define HAVE_SETSID 1
 
 /* Define to 1 if you have the `setutent' function. */
 /* #undef HAVE_SETUTENT */

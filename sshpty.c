@@ -53,6 +53,51 @@
 # endif
 #endif
 
+#ifdef WINDOWS
+/* 
+ * Windows versions of pty_*. Some of them are NO-OPs and should go away when
+ * pty logic is refactored and abstracted out 
+ * 
+ */
+int
+pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, size_t namebuflen)
+{
+        /*
+        * Simple console screen implementation in Win32 to give a Unix like pty for interactive sessions
+        */
+        *ttyfd = 0;
+        *ptyfd = 0;
+        strlcpy(namebuf, "console", namebuflen);
+        return 1;
+}
+
+void
+pty_release(const char *tty) {
+        /* NO-OP */
+}
+
+void
+pty_make_controlling_tty(int *ttyfd, const char *tty) {
+        /* NO-OP */
+}
+
+void
+pty_change_window_size(int ptyfd, u_int row, u_int col,
+        u_int xpixel, u_int ypixel) {
+        COORD coord;
+        coord.X = col;
+        coord.Y = 9999;
+        SetConsoleScreenBufferSize(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+}
+
+
+void
+pty_setowner(struct passwd *pw, const char *tty) {
+        /* NO-OP */
+}
+
+#else
+
 /*
  * Allocates and opens a pty.  Returns 0 if no pty could be allocated, or
  * nonzero if a pty was successfully allocated.  On success, open file
@@ -63,7 +108,6 @@
 int
 pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, size_t namebuflen)
 {
-#ifndef WIN32_FIXME
 	/* openpty(3) exists in OSF/1 and some other os'es */
 	char *name;
 	int i;
@@ -79,18 +123,6 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, size_t namebuflen)
 
 	strlcpy(namebuf, name, namebuflen);	/* possible truncation */
 	return 1;
-#else
-
-  /*
-   * Simple console screen implementation in Win32 to give a Unix like pty for interactive sessions
-   */
-  *ttyfd = 0; // first ttyfd & ptyfd is indexed at 0
-  *ptyfd = 0;
-  strlcpy(namebuf, "console", namebuflen);
-  return 1;
-  //return 0;
-   
-#endif
 }
 
 /* Releases the tty.  Its ownership is returned to root, and permissions to 0666. */
@@ -98,14 +130,12 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, size_t namebuflen)
 void
 pty_release(const char *tty)
 {
-#ifndef WIN32_FIXME
 #if !defined(__APPLE_PRIVPTY__) && !defined(HAVE_OPENPTY)
 	if (chown(tty, (uid_t) 0, (gid_t) 0) < 0)
 		error("chown %.100s 0 0 failed: %.100s", tty, strerror(errno));
 	if (chmod(tty, (mode_t) 0666) < 0)
 		error("chmod %.100s 0666 failed: %.100s", tty, strerror(errno));
 #endif /* !__APPLE_PRIVPTY__ && !HAVE_OPENPTY */
-#endif
 }
 
 /* Makes the tty the process's controlling tty and sets it to sane modes. */
@@ -113,7 +143,6 @@ pty_release(const char *tty)
 void
 pty_make_controlling_tty(int *ttyfd, const char *tty)
 {
-#ifndef WIN32_FIXME
 	int fd;
 
 #ifdef _UNICOS
@@ -184,7 +213,6 @@ pty_make_controlling_tty(int *ttyfd, const char *tty)
 	else
 		close(fd);
 #endif /* _UNICOS */
-#endif
 }
 
 /* Changes the window size associated with the pty. */
@@ -193,7 +221,6 @@ void
 pty_change_window_size(int ptyfd, u_int row, u_int col,
 	u_int xpixel, u_int ypixel)
 {
-#ifndef WIN32_FIXME
 	struct winsize w;
 
 	/* may truncate u_int -> u_short */
@@ -202,18 +229,11 @@ pty_change_window_size(int ptyfd, u_int row, u_int col,
 	w.ws_xpixel = xpixel;
 	w.ws_ypixel = ypixel;
 	(void) ioctl(ptyfd, TIOCSWINSZ, &w);
-#else
-	COORD coord;
-	coord.X = col;
-	coord.Y = 9999;
-	SetConsoleScreenBufferSize(GetStdHandle(STD_OUTPUT_HANDLE), coord);
-#endif
 }
 
 void
 pty_setowner(struct passwd *pw, const char *tty)
 {
-#ifndef WIN32_FIXME
 	struct group *grp;
 	gid_t gid;
 	mode_t mode;
@@ -262,5 +282,6 @@ pty_setowner(struct passwd *pw, const char *tty)
 				    tty, (u_int)mode, strerror(errno));
 		}
 	}
-#endif
 }
+
+#endif
