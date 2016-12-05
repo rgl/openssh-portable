@@ -63,6 +63,9 @@ initialize_pw() {
                 memset(&pw, 0, sizeof(pw));
                 pw.pw_shell = pw_shellpath;
                 pw.pw_passwd = "\0";
+                /* pw_uid = 0 for root on Unix and SSH code has specific restrictions for root 
+                 * that are not applicable in Windows */
+                pw.pw_uid = 1;
         }
         return 0;
 }
