@@ -199,16 +199,24 @@ do_local_cmd(arglist *a)
 		fprintf(stderr, "\n");
 	}
 #ifdef WINDOWS
-	// flatten the cmd into a long space separated string and execute using system(cmd) api
-	char cmdstr[2048] ;
-	cmdstr[0] = '\0' ;
-	for (i = 0; i < a->num; i++) {
-		strcat (cmdstr, a->list[i]);
-		strcat (cmdstr, " ");
+	/* flatten the cmd into a long space separated string and execute using system(cmd) api */
+	{
+		char* cmd;
+		size_t cmdlen = 0;
+		for (i = 0; i < a->num; i++)
+			cmdlen += strlen(a->list[i]) + 1;
+
+		cmd = xmalloc(cmdlen);
+		cmd[0] = '\0';
+		for (i = 0; i < a->num; i++) {
+			strcat(cmd, a->list[i]);
+			strcat(cmd, " ");
+		}
+		if (system(cmd))
+			return -1; 
+		return 0;
 	}
-	if (system(cmdstr))
-		return (-1); // failure executing
-	return (0); // success
+
 #else
 	if ((pid = fork()) == -1)
 		fatal("do_local_cmd: fork: %s", strerror(errno));
@@ -412,7 +420,6 @@ do_cmd(char *host, char *remuser, char *cmd, int *fdin, int *fdout)
 int
 do_cmd2(char *host, char *remuser, char *cmd, int fdin, int fdout)
 {
-#ifndef WIN32_FIXME
 	pid_t pid;
 	int status;
 
@@ -423,7 +430,41 @@ do_cmd2(char *host, char *remuser, char *cmd, int fdin, int fdout)
 		    remuser ? remuser : "(unspecified)", cmd);
 
 	/* Fork a child to execute the command on the remote host using ssh. */
+#ifdef WINDOWS
+	replacearg(&args, 0, "%s", ssh_program);
+	if (remuser != NULL) {
+		addargs(&args, "-l");
+		addargs(&args, "%s", remuser);
+	}
+	addargs(&args, "--");
+	addargs(&args, "%s", host);
+	addargs(&args, "%s", cmd);
+
+	{
+		char* full_cmd;
+		size_t cmdlen = 0;
+		char** list = args.list;
+
+		cmdlen = strlen(w32_programdir()) + 2;
+		while (*list)
+			cmdlen += strlen(*list++) + 1;
+
+		full_cmd = xmalloc(cmdlen);
+		full_cmd[0] = '\0';
+		strcat(full_cmd, w32_programdir());
+		strcat(full_cmd, "\\");
+		list = args.list;
+		while (*list) {
+			strcat(full_cmd, *list++);
+			strcat(full_cmd, " ");
+		}
+
+		pid = spawn_child(full_cmd, fdin, fdout, STDERR_FILENO, 0);
+		free(full_cmd);
+}
+#else
 	pid = fork();
+#endif
 	if (pid == 0) {
 		dup2(fdin, 0);
 		dup2(fdout, 1);
@@ -446,7 +487,6 @@ do_cmd2(char *host, char *remuser, char *cmd, int fdin, int fdout)
 	while (waitpid(pid, &status, 0) == -1)
 		if (errno != EINTR)
 			fatal("do_cmd2: waitpid: %s", strerror(errno));
-#endif
 	return 0;
 }
 
@@ -911,6 +951,7 @@ syserr:			run_err("%s: %s", name, strerror(errno));
 			goto next;
 		}
 #ifdef WINDOWS
+		/* account for both slashes on Windows */
 		{
 			char *lastf = NULL, *lastr = NULL;
 			if ((lastf = strrchr(name, '/')) == NULL && (lastr = strrchr(name, '\\')) == NULL)
@@ -1017,6 +1058,7 @@ rsource(char *name, struct stat *statp)
 	    (u_int) (statp->st_mode & FILEMODEMASK), 0, last);
 	if (verbose_mode)
 #ifdef WINDOWS
+		/* TODO - make fmprintf work for Windows  */
         {
             printf("Entering directory: ");
             wchar_t* wtmp = utf8_to_utf16(path);
@@ -1102,6 +1144,7 @@ sink(int argc, char **argv)
 		*cp = 0;
 		if (verbose_mode)
 #ifdef WINDOWS
+			/* TODO - make fmprintf work for Windows  */
             {
                 printf("Sink: ");
                 wchar_t* wtmp = utf8_to_utf16(buf);
