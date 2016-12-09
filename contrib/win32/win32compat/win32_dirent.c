@@ -10,6 +10,7 @@
 #include "inc\utf.h"
 
 #include "inc\dirent.h"
+#include "inc\libgen.h"
 
 
 struct DIR_ {

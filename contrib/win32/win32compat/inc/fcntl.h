@@ -16,3 +16,5 @@
 #define O_WTEXT       0x10000 /* file mode is UTF16 (translated) */
 #define O_U16TEXT     0x20000 /* file mode is UTF16 no BOM (translated) */
 #define O_U8TEXT      0x40000 /* file mode is UTF8  no BOM (translated) */
+
+#define F_OK 0

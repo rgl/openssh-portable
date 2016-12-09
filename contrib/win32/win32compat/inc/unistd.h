@@ -32,5 +32,6 @@
 #define realpath(a, b) w32_realpath((a),(b))
 
 int daemon(int nochdir, int noclose);
+char *crypt(const char *key, const char *salt);
 
 #endif

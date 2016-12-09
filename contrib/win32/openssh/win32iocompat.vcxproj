@@ -172,12 +172,12 @@
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\dlfcn.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\syslog.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\signal_internal.h" />
-    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\pwd.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\sys\param.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\utf.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\arpa\inet.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\arpa\nameser.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\grp.h" />
+    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\libgen.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\netdb.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\netinet\in.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\netinet\in_systm.h" />
@@ -191,6 +191,7 @@
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\sys\un.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\termios.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\dirent.h" />
+    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\pwd.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

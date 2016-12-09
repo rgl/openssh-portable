@@ -229,7 +229,7 @@ int sys_auth_passwd(Authctxt *authctxt, const char *password)
 		if (msg)
 			sshbuf_free(msg);
 
-		authctxt->methoddata = token;
+                authctxt->methoddata = (void*)(INT_PTR)token;
 		
 	}
 

@@ -85,16 +85,11 @@ extern int ScreenX;
 static int
 can_output(void)
 {
-#ifndef WINDOWS
-    return (getpgrp() == tcgetpgrp(STDOUT_FILENO));
+#ifdef WINDOWS
+    /* TODO - confirm this is always true */
+    return 1;
 #else
-    DWORD dwProcessId = -1;
-    if (GetWindowThreadProcessId(STDOUT_FILENO, &dwProcessId)) {
-        return(GetCurrentProcess() == dwProcessId);
-    }
-    else {
-        return -1;
-    }
+    return (getpgrp() == tcgetpgrp(STDOUT_FILENO));
 #endif
 }
 

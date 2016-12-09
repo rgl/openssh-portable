@@ -216,8 +216,8 @@ userauth_pubkey(Authctxt *authctxt)
 				sshbuf_free(msg);
 
 			if (token) {
-				authenticated = 1;
-				authctxt->methoddata = token;
+				authenticated = 1;                              
+				authctxt->methoddata = (void*)(INT_PTR)token;
 			}
 				
 		}

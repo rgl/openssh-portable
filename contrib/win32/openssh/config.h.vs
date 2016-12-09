@@ -218,8 +218,7 @@
 /* #undef HAVE_B64_PTON */
 
 /* Define if you have the basename function. */
-/* For Windows, this is defined in dirent.h, but that header is not included in sftp.c */
-/* #define HAVE_BASENAME */
+#define HAVE_BASENAME 1
 
 /* Define to 1 if you have the `bcopy' function. */
 /* #undef HAVE_BCOPY */
@@ -583,7 +582,7 @@
 /* #undef HAVE_LIBDL */
 
 /* Define to 1 if you have the <libgen.h> header file. */
-/* #undef HAVE_LIBGEN_H
+#define HAVE_LIBGEN_H 1
 
 /* Define if system has libiaf that supports set_id */
 /* #undef HAVE_LIBIAF */

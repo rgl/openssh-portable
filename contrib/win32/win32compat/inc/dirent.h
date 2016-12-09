@@ -23,6 +23,5 @@ typedef struct DIR_ DIR;
 DIR * opendir(char *name);
 int closedir(DIR *dirp);
 struct dirent *readdir(void *avp);
-char *basename(char *path);
 
 #endif

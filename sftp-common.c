@@ -462,7 +462,7 @@ BOOL ResolveLink(wchar_t * tLink, wchar_t *ret, DWORD * plen, DWORD Flags)
 	}
 	if (fileHandle == INVALID_HANDLE_VALUE)
 	{
-		sprintf_s(ret, *plen, L"%ls", tLink);
+		swprintf_s(ret, *plen, L"%ls", tLink);
 		return TRUE;
 	}
 

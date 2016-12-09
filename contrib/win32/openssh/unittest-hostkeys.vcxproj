@@ -210,7 +210,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="$(OpenSSH-Src-Path)regress\unittests\win32compat\test_helper.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)regress\unittests\test_helper\test_helper.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\wmain_common.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)regress\unittests\hostkeys\tests.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)regress\unittests\hostkeys\test_iterate.c" />

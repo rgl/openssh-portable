@@ -538,7 +538,7 @@ void setup_session_vars(Session* s)
                         ConvertSidToStringSidW(pTokenUser->User.Sid, &sid_str) == FALSE ||
                         swprintf(reg_path, MAX_PATH, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\%ls", sid_str) == MAX_PATH ||
                         RegOpenKeyExW(HKEY_LOCAL_MACHINE, reg_path, 0, STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &reg_key) != 0 ||
-                        RegQueryValueExW(reg_key, L"ProfileImagePath", 0, NULL, pw_dir_w, &tmp_len) != 0) {
+                        RegQueryValueExW(reg_key, L"ProfileImagePath", 0, NULL, (LPBYTE)pw_dir_w, &tmp_len) != 0) {
                         /* one of the above failed */
                         debug("cannot retirve profile path - perhaps user profile is not created yet");
                 }
@@ -573,7 +573,7 @@ void setup_session_vars(Session* s)
                                         name_len = MAX_VALUE_LEN * 2;
                                         data_len = MAX_DATA_LEN * 2;
                                         to_apply = NULL;
-                                        if (RegEnumValueW(reg_key, i++, &value_name, &name_len, 0, &value_type, &value_data, &data_len) != ERROR_SUCCESS)
+                                        if (RegEnumValueW(reg_key, i++, &value_name, &name_len, 0, &value_type, (LPBYTE)&value_data, &data_len) != ERROR_SUCCESS)
                                                 break;
                                         if (value_type == REG_SZ)
                                                 to_apply = value_data;
@@ -810,7 +810,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
         }
         else
         {
-                server_loop(pi.hProcess, pipein[1], pipeout[0], pipeerr[0]);
+                server_loop(pi.dwProcessId, pipein[1], pipeout[0], pipeerr[0]);
 
                 /*
                 * server_loop has closed inout[0] and err[0].
