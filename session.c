@@ -573,7 +573,7 @@ void setup_session_vars(Session* s)
                                         name_len = MAX_VALUE_LEN * 2;
                                         data_len = MAX_DATA_LEN * 2;
                                         to_apply = NULL;
-                                        if (RegEnumValueW(reg_key, i++, &value_name, &name_len, 0, &value_type, (LPBYTE)&value_data, &data_len) != ERROR_SUCCESS)
+                                        if (RegEnumValueW(reg_key, i++, value_name, &name_len, 0, &value_type, (LPBYTE)&value_data, &data_len) != ERROR_SUCCESS)
                                                 break;
                                         if (value_type == REG_SZ)
                                                 to_apply = value_data;

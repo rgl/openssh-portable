@@ -226,19 +226,19 @@ w32_accept(int fd, struct sockaddr* addr, int* addrlen)
 }
 
 int
-w32_setsockopt(int fd, int level, int optname, const char* optval, int optlen) {
+w32_setsockopt(int fd, int level, int optname, const void* optval, int optlen) {
 	
 	CHECK_FD(fd);
 	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
-	return socketio_setsockopt(fd_table.w32_ios[fd], level, optname, optval, optlen);
+	return socketio_setsockopt(fd_table.w32_ios[fd], level, optname, (const char*)optval, optlen);
 }
 
 int
-w32_getsockopt(int fd, int level, int optname, char* optval, int* optlen) {
+w32_getsockopt(int fd, int level, int optname, void* optval, int* optlen) {
 	
 	CHECK_FD(fd);
 	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
-	return socketio_getsockopt(fd_table.w32_ios[fd], level, optname, optval, optlen);
+	return socketio_getsockopt(fd_table.w32_ios[fd], level, optname, (char*)optval, optlen);
 }
 
 int

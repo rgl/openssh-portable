@@ -32,8 +32,8 @@ void w32posix_done();
 /*network i/o*/
 int w32_socket(int domain, int type, int protocol);
 int w32_accept(int fd, struct sockaddr* addr, int* addrlen);
-int w32_setsockopt(int fd, int level, int optname, const char* optval, int optlen);
-int w32_getsockopt(int fd, int level, int optname, char* optval, int* optlen);
+int w32_setsockopt(int fd, int level, int optname, const void* optval, int optlen);
+int w32_getsockopt(int fd, int level, int optname, void* optval, int* optlen);
 int w32_getsockname(int fd, struct sockaddr* name, int* namelen);
 int w32_getpeername(int fd, struct sockaddr* name, int* namelen);
 int w32_listen(int fd, int backlog);
