@@ -66,7 +66,36 @@ ssh_askpass(char *askpass, const char *msg)
 		return NULL;
 	}
 	osigchld = signal(SIGCHLD, SIG_DFL);
+#ifdef WINDOWS 
+	/* spawd child for Windows */
+	pid = -1;
+	{
+		PROCESS_INFORMATION pi = { 0 };
+		STARTUPINFOW si = { 0 };
+		
+		fcntl(p[0], F_SETFD, FD_CLOEXEC);
+		
+		si.cb = sizeof(STARTUPINFOW);
+		si.hStdInput = sfd_to_handle(p[1]);
+		si.hStdOutput = sfd_to_handle(p[1]);
+		si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+		si.wShowWindow = SW_HIDE;
+		si.dwFlags = STARTF_USESTDHANDLES;
+		si.lpDesktop = NULL;
+		if (CreateProcessW(NULL, utf8_to_utf16(askpass), NULL, NULL, TRUE,
+			NORMAL_PRIORITY_CLASS, NULL,
+			NULL, &si, &pi) == TRUE) {
+			pid = pi.dwProcessId;
+			CloseHandle(pi.hThread);
+			sw_add_child(pi.hProcess, pi.dwProcessId);
+		}
+		else
+			errno = GetLastError();
+	}
+	if (pid < 0) {
+#else
 	if ((pid = fork()) < 0) {
+#endif
 		error("ssh_askpass: fork: %s", strerror(errno));
 		signal(SIGCHLD, osigchld);
 		return NULL;
@@ -118,6 +147,70 @@ ssh_askpass(char *askpass, const char *msg)
 char *
 read_passphrase(const char *prompt, int flags)
 {
+	
+#ifdef WINDOWS
+    /* TODO - review this logic */
+	char *askpass = NULL;
+	char *ret = NULL;
+	char buf[1024] = { 0 };
+
+	DWORD mode;
+	size_t len = 0;
+	int retr = 0;
+
+	if (getenv(SSH_ASKPASS_ENV)) {
+		askpass = getenv(SSH_ASKPASS_ENV);
+		if ((ret = ssh_askpass(askpass, prompt)) == NULL) 	{
+			if (!(flags & RP_ALLOW_EOF))
+				return xstrdup("");
+		}
+		return ret;
+	}
+
+	/* prompt user */
+	_cputws(utf8_to_utf16(prompt));
+
+	len = retr = 0;
+	int bufsize = sizeof(buf);
+
+	while (_kbhit())
+		_getch();
+
+	while (len < bufsize) {
+		buf[len] = (unsigned char)_getch();
+
+		if (buf[len] == '\r') {
+			if (_kbhit())
+				_getch(); // read linefeed if its there
+			break;
+		}
+		else if (buf[len] == '\n') {
+			break;
+}
+		else if (buf[len] == '\b') { // backspace
+			if (len > 0)
+				len--; // overwrite last character
+		}
+		else if (buf[len] == '\003') {
+			/* exit on Ctrl+C */
+			fatal("");
+		}
+		else {
+			len++; // keep reading in the loop
+		}
+	}
+
+	buf[len] = '\0'; // get rid of the cr/lf
+	_cputs("\n"); // show a newline as we do not echo password or the line
+
+	ret = xstrdup(buf);
+
+	memset(buf, 'x', sizeof(buf));
+
+	return ret;
+
+#else
+
 	char *askpass = NULL, *ret, buf[1024];
 	int rppflags, use_askpass = 0, ttyfd;
 
@@ -164,6 +257,9 @@ read_passphrase(const char *prompt, int flags)
 	ret = xstrdup(buf);
 	explicit_bzero(buf, sizeof(buf));
 	return ret;
+	
+#endif
+
 }
 
 int

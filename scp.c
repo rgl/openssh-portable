@@ -195,6 +195,26 @@ do_local_cmd(arglist *a)
 			fmprintf(stderr, " %s", a->list[i]);
 		fprintf(stderr, "\n");
 	}
+#ifdef WINDOWS
+	/* flatten the cmd into a long space separated string and execute using system(cmd) api */
+	{
+		char* cmd;
+		size_t cmdlen = 0;
+		for (i = 0; i < a->num; i++)
+			cmdlen += strlen(a->list[i]) + 1;
+
+		cmd = xmalloc(cmdlen);
+		cmd[0] = '\0';
+		for (i = 0; i < a->num; i++) {
+			strcat(cmd, a->list[i]);
+			strcat(cmd, " ");
+		}
+		if (system(cmd))
+			return -1; 
+		return 0;
+	}
+
+#else
 	if ((pid = fork()) == -1)
 		fatal("do_local_cmd: fork: %s", strerror(errno));
 
@@ -219,6 +239,7 @@ do_local_cmd(arglist *a)
 		return (-1);
 
 	return (0);
+#endif
 }
 
 /*
@@ -260,7 +281,46 @@ do_cmd(char *host, char *remuser, char *cmd, int *fdin, int *fdout)
 	signal(SIGTTOU, suspchild);
 
 	/* Fork a child to execute the command on the remote host using ssh. */
+#ifdef WINDOWS
+	replacearg(&args, 0, "%s", ssh_program);
+	if (remuser != NULL) {
+		addargs(&args, "-l");
+		addargs(&args, "%s", remuser);
+	}
+	addargs(&args, "--");
+	addargs(&args, "%s", host);
+	addargs(&args, "%s", cmd);
+
+	{
+		char* full_cmd;
+		size_t cmdlen = 0;
+		char** list = args.list;
+
+		cmdlen = strlen(w32_programdir()) + 2;
+		while (*list)
+			cmdlen += strlen(*list++) + 1;
+
+		full_cmd = xmalloc(cmdlen);
+		full_cmd[0] = '\0';
+		strcat(full_cmd, w32_programdir());
+		strcat(full_cmd, "\\");
+		list = args.list;
+		while (*list) {
+			strcat(full_cmd, *list++);
+			strcat(full_cmd, " ");
+		}
+
+		fcntl(pout[0], F_SETFD, FD_CLOEXEC);
+		fcntl(pin[1], F_SETFD, FD_CLOEXEC);
+
+		do_cmd_pid = spawn_child(full_cmd, pin[0], pout[1], STDERR_FILENO, 0);
+		free(full_cmd);
+	}
+
+
+#else
 	do_cmd_pid = fork();
+#endif
 	if (do_cmd_pid == 0) {
 		/* Child. */
 		close(pin[1]);
@@ -297,7 +357,7 @@ do_cmd(char *host, char *remuser, char *cmd, int *fdin, int *fdout)
 }
 
 /*
- * This functions executes a command simlar to do_cmd(), but expects the
+ * This functions executes a command similar to do_cmd(), but expects the
  * input and output descriptors to be setup by a previous call to do_cmd().
  * This way the input and output of two commands can be connected.
  */
@@ -314,7 +374,41 @@ do_cmd2(char *host, char *remuser, char *cmd, int fdin, int fdout)
 		    remuser ? remuser : "(unspecified)", cmd);
 
 	/* Fork a child to execute the command on the remote host using ssh. */
+#ifdef WINDOWS
+	replacearg(&args, 0, "%s", ssh_program);
+	if (remuser != NULL) {
+		addargs(&args, "-l");
+		addargs(&args, "%s", remuser);
+	}
+	addargs(&args, "--");
+	addargs(&args, "%s", host);
+	addargs(&args, "%s", cmd);
+
+	{
+		char* full_cmd;
+		size_t cmdlen = 0;
+		char** list = args.list;
+
+		cmdlen = strlen(w32_programdir()) + 2;
+		while (*list)
+			cmdlen += strlen(*list++) + 1;
+
+		full_cmd = xmalloc(cmdlen);
+		full_cmd[0] = '\0';
+		strcat(full_cmd, w32_programdir());
+		strcat(full_cmd, "\\");
+		list = args.list;
+		while (*list) {
+			strcat(full_cmd, *list++);
+			strcat(full_cmd, " ");
+		}
+
+		pid = spawn_child(full_cmd, fdin, fdout, STDERR_FILENO, 0);
+		free(full_cmd);
+}
+#else
 	pid = fork();
+#endif
 	if (pid == 0) {
 		dup2(fdin, 0);
 		dup2(fdout, 1);
@@ -800,10 +894,26 @@ syserr:			run_err("%s: %s", name, strerror(errno));
 			run_err("%s: not a regular file", name);
 			goto next;
 		}
+#ifdef WINDOWS
+		/* account for both slashes on Windows */
+		{
+			char *lastf = NULL, *lastr = NULL;
+			if ((lastf = strrchr(name, '/')) == NULL && (lastr = strrchr(name, '\\')) == NULL)
+				last = name;
+			else {
+				if (lastf)
+					last = lastf;
+				if (lastr)
+					last = lastr;
+				++last;
+			}
+		}
+#else
 		if ((last = strrchr(name, '/')) == NULL)
 			last = name;
 		else
 			++last;
+#endif
 		curfile = last;
 		if (pflag) {
 			if (do_times(remout, verbose_mode, &stb) < 0)
@@ -891,7 +1001,17 @@ rsource(char *name, struct stat *statp)
 	(void) snprintf(path, sizeof path, "D%04o %d %.1024s\n",
 	    (u_int) (statp->st_mode & FILEMODEMASK), 0, last);
 	if (verbose_mode)
+#ifdef WINDOWS
+		/* TODO - make fmprintf work for Windows  */
+        {
+            printf("Entering directory: ");
+            wchar_t* wtmp = utf8_to_utf16(path);
+            WriteConsoleW(GetStdHandle(STD_ERROR_HANDLE), wtmp, wcslen(wtmp), 0, 0);
+            free(wtmp);
+        }
+#else
 		fmprintf(stderr, "Entering directory: %s", path);
+#endif
 	(void) atomicio(vwrite, remout, path, strlen(path));
 	if (response() < 0) {
 		closedir(dirp);
@@ -966,8 +1086,17 @@ sink(int argc, char **argv)
 		} while (cp < &buf[sizeof(buf) - 1] && ch != '\n');
 		*cp = 0;
 		if (verbose_mode)
+#ifdef WINDOWS
+			/* TODO - make fmprintf work for Windows  */
+            {
+                printf("Sink: ");
+                wchar_t* wtmp = utf8_to_utf16(buf);
+                WriteConsoleW(GetStdHandle(STD_ERROR_HANDLE), wtmp, wcslen(wtmp), 0, 0);
+                free(wtmp);
+            }
+#else
 			fmprintf(stderr, "Sink: %s", buf);
-
+#endif
 		if (buf[0] == '\01' || buf[0] == '\02') {
 			if (iamremote == 0) {
 				(void) snmprintf(visbuf, sizeof(visbuf),

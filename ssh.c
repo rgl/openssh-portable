@@ -547,6 +547,7 @@ main(int ac, char **av)
 	 */
 	closefrom(STDERR_FILENO + 1);
 
+#ifndef WINDOWS
 	/*
 	 * Save the original real uid.  It will be needed later (uid-swapping
 	 * may clobber the real uid).
@@ -562,6 +563,7 @@ main(int ac, char **av)
 	 * has been made, as we may need to create the port several times).
 	 */
 	PRIV_END;
+#endif
 
 #ifdef HAVE_SETRLIMIT
 	/* If we are installed setuid root be careful to not drop core. */
@@ -1466,6 +1468,7 @@ main(int ac, char **av)
 static void
 control_persist_detach(void)
 {
+#ifndef WINDOWS
 	pid_t pid;
 	int devnull, keep_stderr;
 
@@ -1508,6 +1511,9 @@ control_persist_detach(void)
 	}
 	daemon(1, 1);
 	setproctitle("%s [mux]", options.control_path);
+#else
+	fatal("ControlMaster is not supported in Windows");
+#endif
 }
 
 /* Do fork() after authentication. Used by "ssh -f" */

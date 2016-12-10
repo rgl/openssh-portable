@@ -81,7 +81,12 @@ static const char unit[] = " KMGT";
 static int
 can_output(void)
 {
+#ifdef WINDOWS
+	/* TODO - confirm this is always true */
+	return 1;
+#else
 	return (getpgrp() == tcgetpgrp(STDOUT_FILENO));
+#endif
 }
 
 static void
@@ -222,7 +227,13 @@ refresh_progress_meter(void)
 			strlcat(buf, "    ", win_size);
 	}
 
+#ifdef WINDOWS
+	wchar_t* wtmp = utf8_to_utf16(buf);
+	WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
+    free(wtmp);
+#else
 	atomicio(vwrite, STDOUT_FILENO, buf, win_size - 1);
+#endif
 	last_update = now;
 }
 
@@ -279,7 +290,11 @@ stop_progress_meter(void)
 	if (cur_pos != end_pos)
 		refresh_progress_meter();
 
+#ifdef WINDOWS
+	WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
+#else
 	atomicio(vwrite, STDOUT_FILENO, "\n", 1);
+#endif
 }
 
 /*ARGSUSED*/

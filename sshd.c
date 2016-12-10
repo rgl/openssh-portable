@@ -163,7 +163,12 @@ int saved_argc;
 
 /* re-exec */
 int rexeced_flag = 0;
+#ifdef WINDOWS
+/* rexec is not supported in Windows */
+int rexec_flag = 0;
+#else
 int rexec_flag = 1;
+#endif
 int rexec_argc = 0;
 char **rexec_argv;
 
@@ -220,7 +225,12 @@ int *startup_pipes = NULL;
 int startup_pipe;		/* in child */
 
 /* variables used for privilege separation */
+#ifdef WINDOWS
+/* Windows does not use Unix privilege separation model */
+int use_prevsep = 0;
+#else
 int use_privsep = -1;
+#endif
 struct monitor *pmonitor = NULL;
 int privsep_is_preauth = 1;
 
@@ -236,10 +246,66 @@ Buffer loginmsg;
 /* Unprivileged user */
 struct passwd *privsep_pw = NULL;
 
+/* is child process - used by Windows implementation*/
+int is_child = 0;
+
 /* Prototypes for various functions defined later in this file. */
 void destroy_sensitive_data(void);
 void demote_sensitive_data(void);
 static void do_ssh2_kex(void);
+
+/*
+   * Retrieve path to current running module.
+   *
+   * path     - buffer, where to store path (OUT).
+   * pathSize - size of path buffer in bytes (IN).
+   *
+   * RETURNS: 0 if OK.
+   */
+   
+  int GetCurrentModulePath(char *path, int pathSize)
+  {
+    int exitCode = -1;
+    
+#ifdef WINDOWS
+
+    char* dir = w32_programdir();
+    if (strnlen(dir, pathSize) == pathSize) 
+        error("program directory path size exceeded provided pathSize %d", pathSize);
+    else {
+        memcpy(path, dir, strnlen(dir, pathSize) + 1);
+        exitCode = 0;
+    }
+    
+#endif
+    
+    //
+    // Linux.
+    //
+    
+    #ifdef __linux__
+
+      if (readlink ("/proc/self/exe", path, pathSize) != -1)
+      {
+        dirname(path);
+
+        strcat(path, "/");
+       
+        exitCode = 0;
+      }
+    
+    #endif
+  
+    //
+    // MacOS.
+    //
+    
+    #ifdef __APPLE__
+    
+    #endif
+  
+    return exitCode;
+  }  
 
 /*
  * Close all listening sockets
@@ -521,6 +587,29 @@ reseed_prngs(void)
 	explicit_bzero(rnd, sizeof(rnd));
 }
 
+#ifdef WINDOWS
+/* 
+ * No-OP defs for preauth routines for Windows 
+ * these should go away once the privilege separation 
+ * related is refactored to be invoked only when applicable 
+ */
+static void
+privsep_preauth_child(void) {
+        return;
+}
+
+static int
+privsep_preauth(Authctxt *authctxt) {
+        return 0;
+}
+
+static void
+privsep_postauth(Authctxt *authctxt) {
+        return;
+}
+
+#else
+/* Unix privilege separation routines */
 static void
 privsep_preauth_child(void)
 {
@@ -556,7 +645,6 @@ privsep_preauth_child(void)
 		if (setgroups(1, gidset) < 0)
 			fatal("setgroups: %.100s", strerror(errno));
 		permanently_set_uid(privsep_pw);
-	}
 }
 
 static int
@@ -679,6 +767,8 @@ privsep_postauth(Authctxt *authctxt)
 	 */
 	packet_set_authenticated();
 }
+
+#endif 
 
 static char *
 list_hostkey_types(void)
@@ -1234,6 +1324,35 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 			 * parent continues listening.
 			 */
 			platform_pre_fork();
+#ifdef WINDOWS
+			/* 
+            * fork() repleacement for Windows -
+            * - Put accepted socket in a env varaibale
+            * - disable inheritance on listening socket and startup fds
+            * - Spawn child sshd.exe 
+            */
+            {
+				char* path_utf8 = utf16_to_utf8(GetCommandLineW());
+				char remotesoc[64];
+
+				if (path_utf8 == NULL)
+					fatal("Failed to alloc memory");
+				
+                snprintf(remotesoc, sizeof(remotesoc), "%p", sfd_to_handle(*newsock));
+                SetEnvironmentVariable("SSHD_REMSOC", remotesoc);
+                debug("Remote Handle %s", remotesoc);
+
+                /*TODO - disable inheritance on listener and startup fds*/
+				pid = spawn_child(path_utf8, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, CREATE_NEW_PROCESS_GROUP);
+
+				free(path_utf8);
+				close(*newsock);
+				close(startup_pipes[i]);
+				startup_pipes[i] = -1;
+				startups--;
+			}
+#else
+
 			if ((pid = fork()) == 0) {
 				/*
 				 * Child.  Close the listening and
@@ -1257,7 +1376,7 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 					close(config_s[0]);
 				break;
 			}
-
+#endif
 			/* Parent.  Stay in the loop. */
 			platform_post_fork_parent(pid);
 			if (pid < 0)
@@ -1626,6 +1745,7 @@ main(int ac, char **av)
 #endif
 	);
 
+#ifndef WINDOWS
 	/* Store privilege separation user for later use if required. */
 	if ((privsep_pw = getpwnam(SSH_PRIVSEP_USER)) == NULL) {
 		if (use_privsep || options.kerberos_authentication)
@@ -1639,6 +1759,7 @@ main(int ac, char **av)
 		privsep_pw->pw_passwd = xstrdup("*");
 	}
 	endpwent();
+#endif
 
 	/* load host keys */
 	sensitive_data.host_keys = xcalloc(options.num_host_key_files,
@@ -1656,7 +1777,9 @@ main(int ac, char **av)
 			error("Could not connect to agent \"%s\": %s",
 			    options.host_key_agent, ssh_err(r));
 	}
-
+#ifdef WIN32_FIXME
+	have_agent = 1;
+#endif
 	for (i = 0; i < options.num_host_key_files; i++) {
 		if (options.host_key_files[i] == NULL)
 			continue;
@@ -1832,6 +1955,10 @@ main(int ac, char **av)
 		server_accept_inetd(&sock_in, &sock_out);
 	} else {
 		platform_pre_listen();
+#ifdef WINDOWS
+		/* For Windows child sshd, skip listener */
+		if (is_child == 0)
+#endif
 		server_listen();
 
 		signal(SIGHUP, sighup_handler);
@@ -1854,6 +1981,25 @@ main(int ac, char **av)
 				fclose(f);
 			}
 		}
+
+#ifdef WINDOWS
+      /* Windows - for sshd child, pick up the accepted socket*/
+      if (is_child) {      
+		char *stopstring;
+		DWORD_PTR remotesochandle;
+		remotesochandle = strtol(getenv("SSHD_REMSOC"), &stopstring, 16);
+		debug("remote channel %d", remotesochandle);
+
+		sock_in = sock_out = newsock = w32_allocate_fd_for_handle((HANDLE)remotesochandle, TRUE);
+
+		// we have the socket handle, delete it for child processes we create like shell 
+		SetEnvironmentVariable("SSHD_REMSOC", NULL);
+		SetHandleInformation((HANDLE)remotesochandle, HANDLE_FLAG_INHERIT, 0); // make the handle not to be inherited
+
+		startup_pipe = -1;
+      }
+	  else /* Windows and Unix sshd parent */
+#endif
 
 		/* Accept a connection and return in a forked child */
 		server_accept_loop(&sock_in, &sock_out,

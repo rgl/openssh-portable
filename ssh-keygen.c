@@ -1036,6 +1036,12 @@ do_gen_all_hostkeys(struct passwd *pw)
 		}
 		sshkey_free(private);
 		strlcat(identity_file, ".pub", sizeof(identity_file));
+#ifdef WINDOWS
+		/* Windows POSIX adpater does not support fdopen() on open(file)*/
+		if ((f = fopen(identity_file, "w")) == NULL) {
+			error("fopen %s failed: %s", identity_file, strerror(errno));
+		/* TODO - set permissions on file */
+#else
 		fd = open(identity_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if (fd == -1) {
 			error("Could not save your public key in %s",
@@ -1048,6 +1054,7 @@ do_gen_all_hostkeys(struct passwd *pw)
 		if (f == NULL) {
 			error("fdopen %s failed", identity_file);
 			close(fd);
+#endif
 			sshkey_free(public);
 			first = 0;
 			continue;
@@ -1187,6 +1194,10 @@ known_hosts_find_delete(struct hostkey_foreach_line *l, void *_ctx)
 static void
 do_known_hosts(struct passwd *pw, const char *name)
 {
+#ifdef WINDOWS
+        fatal("Updating known_hosts is not supported in Windows yet.");
+#else
+	  
 	char *cp, tmp[PATH_MAX], old[PATH_MAX];
 	int r, fd, oerrno, inplace = 0;
 	struct known_hosts_ctx ctx;
@@ -1278,6 +1289,7 @@ do_known_hosts(struct passwd *pw, const char *name)
 	}
 
 	exit (find_host && !ctx.found_key);
+#endif 
 }
 
 /*
@@ -2723,11 +2735,18 @@ passphrase_again:
 		printf("Your identification has been saved in %s.\n", identity_file);
 
 	strlcat(identity_file, ".pub", sizeof(identity_file));
+#ifdef WINDOWS
+	/* Windows POSIX adpater does not support fdopen() on open(file)*/
+	if ((f = fopen(identity_file, "w")) == NULL)
+		fatal("fopen %s failed: %s", identity_file, strerror(errno));
+	/* TODO - set permissions on file */
+#else
 	if ((fd = open(identity_file, O_WRONLY|O_CREAT|O_TRUNC, 0644)) == -1)
 		fatal("Unable to save public key to %s: %s",
 		    identity_file, strerror(errno));
 	if ((f = fdopen(fd, "w")) == NULL)
 		fatal("fdopen %s failed: %s", identity_file, strerror(errno));
+#endif
 	if ((r = sshkey_write(public, f)) != 0)
 		error("write key failed: %s", ssh_err(r));
 	fprintf(f, " %s\n", comment);

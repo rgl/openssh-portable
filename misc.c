@@ -432,9 +432,33 @@ char *
 colon(char *cp)
 {
 	int flag = 0;
+    int len = 0;
 
 	if (*cp == ':')		/* Leading colon is part of file name. */
 		return NULL;
+
+#ifdef WINDOWS
+	/* TODO - Why is this required ?*/
+    for (; *cp; ++cp) {
+        len++;
+
+        if (*cp == '[')
+            flag = 1;
+
+        if (flag && *cp != ']')
+            continue;
+
+        if (*cp == ']')
+            flag = 0;
+		/* avoid x: format for drive letter in Windows */
+        if (*cp == ':') {
+            if (len != 2) { 
+                return (cp);
+            }
+        }
+    }
+    return NULL;
+#else
 	if (*cp == '[')
 		flag = 1;
 
@@ -449,6 +473,7 @@ colon(char *cp)
 			return NULL;
 	}
 	return NULL;
+#endif
 }
 
 /*
@@ -615,7 +640,6 @@ tilde_expand_filename(const char *filename, uid_t uid)
 
 	if (xasprintf(&ret, "%s%s%s", pw->pw_dir, sep, filename) >= PATH_MAX)
 		fatal("tilde_expand_filename: Path too long");
-
 	return (ret);
 }
 
@@ -783,6 +807,10 @@ tun_open(int tun, int mode)
 void
 sanitise_stdfd(void)
 {
+#ifdef WINDOWS
+	/* nothing to do for Windows*/
+	return;
+#else
 	int nullfd, dupfd;
 
 	if ((nullfd = dupfd = open(_PATH_DEVNULL, O_RDWR)) == -1) {
@@ -801,6 +829,7 @@ sanitise_stdfd(void)
 	}
 	if (nullfd > STDERR_FILENO)
 		close(nullfd);
+#endif
 }
 
 char *
