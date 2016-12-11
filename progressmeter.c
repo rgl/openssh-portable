@@ -78,10 +78,6 @@ static volatile sig_atomic_t win_resized; /* for window resizing */
 /* units for format_size */
 static const char unit[] = " KMGT";
 
-#ifdef WINDOWS
-extern int ScreenX;
-#endif
-
 static int
 can_output(void)
 {
@@ -234,7 +230,7 @@ refresh_progress_meter(void)
 #ifdef WINDOWS
 	wchar_t* wtmp = utf8_to_utf16(buf);
 	WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-    free(wtmp);
+        free(wtmp);
 #else
 	atomicio(vwrite, STDOUT_FILENO, buf, win_size - 1);
 #endif
