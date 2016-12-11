@@ -6,6 +6,7 @@
 */
 #pragma once
 #include "..\fcntl.h"
+#include "param.h"
 
 /* flags COPIED FROM STAT.H
  */
