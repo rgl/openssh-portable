@@ -1282,6 +1282,13 @@ bind_permitted(int port, uid_t uid)
 }
 
 /* returns 1 if process is already daemonized, 0 otherwise */
+#ifdef WINDOWS
+int 
+daemonized(void)
+{
+	return 1;
+}
+#else
 int
 daemonized(void)
 {
@@ -1298,3 +1305,4 @@ daemonized(void)
 	debug3("already daemonized");
 	return 1;
 }
+#endif
