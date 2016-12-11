@@ -32,12 +32,15 @@
 #define S_IFLNK  _S_IFLNK
 #define S_IFSOCK _S_IFSOCK
 
-
 #define stat w32_stat
 #define lstat w32_stat
-#define mkdir w32_mkdir
-#define chdir w32_chdir
 #define getcwd w32_getcwd
+#define mkdir w32_mkdir
+#define rmdir w32_rmdir
+#define chdir w32_chdir
+#define unlink w32_unlink
+#define rename w32_rename
+#define chmod w32_chmod
 
 struct w32_stat {
 	dev_t     st_dev;     /* ID of device containing file */
@@ -52,3 +55,8 @@ struct w32_stat {
 	__int64    st_mtime;   /* time of last modification */
 	__int64    st_ctime;   /* time of last status change */
 };
+
+typedef unsigned short _mode_t;
+typedef _mode_t mode_t;
+
+void strmode(mode_t mode, char *p);

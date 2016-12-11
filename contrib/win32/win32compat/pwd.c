@@ -37,6 +37,7 @@
 #define SECURITY_WIN32
 #include <security.h>
 #include "inc\pwd.h"
+#include "inc\grp.h"
 #include "inc\utf.h"
 
 static struct passwd pw;
@@ -218,6 +219,16 @@ done:
         if (user_sid)
                 LocalFree(user_sid);
         return ret;
+}
+
+
+
+char *group_from_gid(gid_t gid, int nogroup) {
+	return "-";
+}
+
+char *user_from_uid(uid_t uid, int nouser) {
+	return "-";
 }
 
 

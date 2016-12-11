@@ -44,9 +44,6 @@ int w32_send(int fd, const void *buf, size_t len, int flags);
 int w32_shutdown(int fd, int how);
 int w32_socketpair(int domain, int type, int protocol, int sv[2]);
 
-char *realpathWin32(const char *path, char resolved[MAX_PATH]);
-char *realpathWin32i(const char *path, char resolved[MAX_PATH]);
-
 /*non-network (file) i/o*/
 #undef fdopen
 #define fdopen(a,b)	w32_fdopen((a), (b))
@@ -65,8 +62,11 @@ long w32_lseek( int fd, long offset, int origin);
 int w32_isatty(int fd);
 FILE* w32_fdopen(int fd, const char *mode);
 int w32_mkdir(const char *pathname, unsigned short mode);
+int w32_rmdir(const char *pathname);
 int w32_chdir(const char *dirname);
 char *w32_getcwd(char *buffer, int maxlen);
+int w32_unlink(const char *path);
+int w32_rename(const char *old_name, const char *new_name);
 
 /*common i/o*/
 #define fcntl(a,b,...)		w32_fcntl((a), (b),  __VA_ARGS__)
@@ -94,6 +94,7 @@ int w32_ftruncate(int fd, off_t length);
 char* w32_programdir();
 int w32_fsync(int fd);
 int w32_ioctl(int d, int request, ...);
+int w32_chmod(const char *, mode_t);
 
 /* Shutdown constants */
 #define SHUT_WR SD_SEND
@@ -171,3 +172,53 @@ explicit_bzero(void *b, size_t len);
 #define fopen w32_fopen_utf8
 #define popen _popen
 #define pclose _pclose
+
+// Maximum reparse buffer info size. The max user defined reparse 
+// data is 16KB, plus there's a header. 
+#define MAX_REPARSE_SIZE	17000 
+#define IO_REPARSE_TAG_SYMBOLIC_LINK      IO_REPARSE_TAG_RESERVED_ZERO 
+#define IO_REPARSE_TAG_MOUNT_POINT              (0xA0000003L)       // winnt ntifs 
+#define IO_REPARSE_TAG_HSM                      (0xC0000004L)       // winnt ntifs 
+#define IO_REPARSE_TAG_SIS                      (0x80000007L)       // winnt ntifs 
+#define REPARSE_MOUNTPOINT_HEADER_SIZE   8 
+
+typedef struct {
+	DWORD          ReparseTag;
+	DWORD          ReparseDataLength;
+	WORD           Reserved;
+	WORD           ReparseTargetLength;
+	WORD           ReparseTargetMaximumLength;
+	WORD           Reserved1;
+	WCHAR          ReparseTarget[1];
+} REPARSE_MOUNTPOINT_DATA_BUFFER, *PREPARSE_MOUNTPOINT_DATA_BUFFER;
+
+typedef struct _REPARSE_DATA_BUFFER {
+	ULONG  ReparseTag;
+	USHORT ReparseDataLength;
+	USHORT Reserved;
+	union {
+		struct {
+			USHORT SubstituteNameOffset;
+			USHORT SubstituteNameLength;
+			USHORT PrintNameOffset;
+			USHORT PrintNameLength;
+			WCHAR PathBuffer[1];
+		} SymbolicLinkReparseBuffer;
+		struct {
+			USHORT SubstituteNameOffset;
+			USHORT SubstituteNameLength;
+			USHORT PrintNameOffset;
+			USHORT PrintNameLength;
+			WCHAR PathBuffer[1];
+		} MountPointReparseBuffer;
+		struct {
+			UCHAR  DataBuffer[1];
+		} GenericReparseBuffer;
+	};
+} REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;
+
+char * get_inside_path(char *, BOOL, BOOL);
+int readlink(const char *path, char *link, int linklen);
+char *realpathWin32(const char *path, char resolved[MAX_PATH]);
+char *realpathWin32i(const char *path, char resolved[MAX_PATH]);
+#define realpath realpathWin32

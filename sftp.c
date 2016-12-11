@@ -293,11 +293,34 @@ help(void)
 	    "?                                  Synonym for help\n");
 }
 
+#ifdef WINDOWS
+/* printf version to account for utf-8 input */
+static void printf_utf8(char *fmt,  ... ) {
+        /* TODO - is 1024 sufficient */
+        char buf[1024];
+        wchar_t* wtmp;
+        va_list valist;
+        va_start(valist, fmt);
+
+        vsnprintf(buf, 1024, fmt, valist);
+        va_end(valist);
+
+        if ((wtmp = utf8_to_utf16(buf)) == NULL)
+                fatal("unable to allocate memory");
+        WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
+        free(wtmp);
+}
+
+#define printf(a,...)		printf_utf8((a), __VA_ARGS__)
+#endif
+
 static void
 local_do_shell(const char *args)
 {
   #ifdef WINDOWS
+        /* execute via system call in Windows*/
 	if (!*args) {
+                /* TODO - support unicode ComSpec */
 		args = (char *)	getenv("ComSpec"); // get name of Windows cmd shell
 	}
 	system(args); // execute the shell or cmd given
@@ -379,7 +402,18 @@ make_absolute(char *p, const char *pwd)
 	char *abs_str;
 
 	/* Derelativise */
+#ifdef WINDOWS
+        /* 
+         * For Windows - given path is absolute when 
+         *   - first character is "/"
+         *   - or second character is ":"
+         * This code is also applicable from a Linux client to Windows target
+         * Need to follow up with community if this makes sense in common code
+         */ 
+        if (p && p[0] != '/' &&  (p[0] == '\0' || p[1] != ':' ) ) {
+#else
 	if (p && p[0] != '/') {
+#endif
 		abs_str = path_append(pwd, p);
 		free(p);
 		return(abs_str);
@@ -618,15 +652,6 @@ process_get(struct sftp_conn *conn, const char *src, const char *dst,
 	abs_src = xstrdup(src);
 	abs_src = make_absolute(abs_src, pwd);
 
-#ifdef WINDOWS
-	if (strlen(abs_src) >= 2 && abs_src[2] == ':')
-	{
-		char *realPath = do_realpath(conn, abs_src);
-		free(abs_src);
-		abs_src = realPath;
-	}
-#endif	
-
 	memset(&g, 0, sizeof(g));
 
 	debug3("Looking up %s", abs_src);
@@ -667,56 +692,17 @@ process_get(struct sftp_conn *conn, const char *src, const char *dst,
 				abs_dst = xstrdup(dst);
 			}
 		} else if (dst) {			
-#ifdef WINDOWS
-			{
-				if (is_dir(dst)) {
-					abs_dst = path_append(dst, filename);
-				}
-				else {
-					abs_dst = xstrdup(dst);
-				}				
-			}
-#else
 			abs_dst = path_append(dst, filename);
-#endif
 		} else {
 			abs_dst = xstrdup(filename);
 		}
 		free(tmp);
 
 		resume |= global_aflag;
-        if (!quiet && resume)
-#ifdef WINDOWS
-        {
-            printf("Resuming ");
-            wchar_t* wtmp = utf8_to_utf16(g.gl_pathv[i]);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-            printf(" to ");
-            free(wtmp);
-            wtmp = utf8_to_utf16(abs_dst);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-            free(wtmp);
-        }
-#else
-			printf("Resuming %s to %s\n", g.gl_pathv[i], abs_dst);
-#endif
-        else if (!quiet && !resume)
-#ifdef WINDOWS
-        {
-            printf("Fetching ");
-            wchar_t* wtmp = utf8_to_utf16(g.gl_pathv[i]);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-            printf(" to ");
-            free(wtmp);
-            wtmp = utf8_to_utf16(abs_dst);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-            free(wtmp);
-        }
-#else
-            printf("Fetching %s to %s\n", g.gl_pathv[i], abs_dst);
-#endif
+                if (!quiet && resume)
+		        printf("Resuming %s to %s\n", g.gl_pathv[i], abs_dst);
+                else if (!quiet && !resume)
+                    printf("Fetching %s to %s\n", g.gl_pathv[i], abs_dst);
 		if (pathname_is_dir(g.gl_pathv[i]) && (rflag || global_rflag)) {
 			if (download_dir(conn, g.gl_pathv[i], abs_dst, NULL,
 			    pflag || global_pflag, 1, resume,
@@ -765,15 +751,6 @@ process_put(struct sftp_conn *conn, const char *src, const char *dst,
 
 	/* If we aren't fetching to pwd then stash this status for later */
 	if (tmp_dst != NULL) {		
-		#ifdef WINDOWS
-		if (strlen(tmp_dst) >= 2 && tmp_dst[2] == ':')
-		{
-			char *realPath = do_realpath(conn, tmp_dst);
-			free(tmp_dst);
-			tmp_dst = realPath;
-		}
-		#endif
-
 		dst_is_dir = remote_is_dir(conn, tmp_dst);
 	}
 		
@@ -808,16 +785,7 @@ process_put(struct sftp_conn *conn, const char *src, const char *dst,
 			else
 				abs_dst = xstrdup(tmp_dst);
 		} else if (tmp_dst) {			
-			#ifdef WINDOWS
-			{
-				if (dst_is_dir)
-					abs_dst = path_append(tmp_dst, filename);
-				else
-					abs_dst = xstrdup(tmp_dst);
-			}
-			#else
-				abs_dst = path_append(tmp_dst, filename);
-			#endif
+			abs_dst = path_append(tmp_dst, filename);
 		} else {
 			abs_dst = make_absolute(xstrdup(filename), pwd);
 		}
@@ -825,38 +793,10 @@ process_put(struct sftp_conn *conn, const char *src, const char *dst,
 
                 resume |= global_aflag;
 		if (!quiet && resume)
-#ifdef WINDOWS
-        {
-            printf("Resuming upload of ");
-            wchar_t* wtmp = utf8_to_utf16(g.gl_pathv[i]);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-            printf(" to ");
-            free(wtmp);
-            wtmp = utf8_to_utf16(abs_dst);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-            free(wtmp);
-        }
-#else
 			printf("Resuming upload of %s to %s\n", g.gl_pathv[i], 
 				abs_dst);
-#endif
 		else if (!quiet && !resume)
-#ifdef WINDOWS
-        {
-            printf("Uploading ");
-            wchar_t* wtmp = utf8_to_utf16(g.gl_pathv[i]);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-            printf(" to ");
-            free(wtmp);
-            wtmp = utf8_to_utf16(abs_dst);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-            free(wtmp);
-        }
-#else
 			printf("Uploading %s to %s\n", g.gl_pathv[i], abs_dst);
-#endif
 		if (pathname_is_dir(g.gl_pathv[i]) && (rflag || global_rflag)) {
 			if (upload_dir(conn, g.gl_pathv[i], abs_dst,
 			    pflag || global_pflag, 1, resume,
@@ -893,6 +833,7 @@ sdirent_comp(const void *aa, const void *bb)
 		return (rmul * NCMP(a->a.size, b->a.size));
 
 	fatal("Unknown ls sort type");
+	return 0;
 }
 
 /* sftp ls.1 replacement for directories */
@@ -957,36 +898,24 @@ do_ls_dir(struct sftp_conn *conn, const char *path,
 				attrib_to_stat(&d[n]->a, &sb);
 				lname = ls_file(fname, &sb, 1,
 				    (lflag & LS_SI_UNITS));
-#ifdef WINDOWS
-                wchar_t* wtmp = utf8_to_utf16(lname);
-                WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-                WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-                free(wtmp);
-#else
-                printf("%s\n", lname);                
-#endif
+                        printf("%s\n", lname);                
 				free(lname);
             }
             else {
-#ifdef WINDOWS
-                wchar_t* wtmp = utf8_to_utf16(d[n]->longname);
-                WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-                WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-                free(wtmp);
-#else
                 printf("%s\n", d[n]->longname);
-#endif       
             }
 		} 
         else {
 #ifdef WINDOWS
-			wchar_t buf[1024]; 
-			wchar_t* wtmp = utf8_to_utf16(fname);
-			swprintf(buf, 1024, L"%-*s", colspace, wtmp);
-			WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), buf, wcslen(buf), 0, 0);
-            free(wtmp);
+                /* cannot use printf_utf8 becuase of width specification */
+                /* printf_utf8 does not account for utf-16 based argument widths */
+	        wchar_t buf[1024]; 
+	        wchar_t* wtmp = utf8_to_utf16(fname);
+	        swprintf(buf, 1024, L"%-*s", colspace, wtmp);
+	        WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), buf, wcslen(buf), 0, 0);
+                free(wtmp);
 #else
-            printf("%-*s", colspace, fname);
+                printf("%-*s", colspace, fname);
 #endif
 			if (c >= columns) {
 				printf("\n");
@@ -1068,24 +997,19 @@ do_globbed_ls(struct sftp_conn *conn, const char *path,
 			}
 			lname = ls_file(fname, g.gl_statv[i], 1,
 			    (lflag & LS_SI_UNITS));
-#ifdef WINDOWS
-            wchar_t* wtmp = utf8_to_utf16(lname);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-            free(wtmp);
-#else
-            printf("%s\n", lname);
-#endif
-            free(lname);
+                        printf("%s\n", lname);
+                        free(lname);
 		} else {
 #ifdef WINDOWS
-            wchar_t* wtmp = utf8_to_utf16(fname);
-            // TODO: Deal with the sizing wprintf_s(L"%-*s", colspace, wtmp);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L" ", 1, 0, 0);
-            free(wtmp);
+                        /* cannot use printf_utf8 becuase of width specification */
+                        /* printf_utf8 does not account for utf-16 based argument widths */
+                        wchar_t buf[1024];
+                        wchar_t* wtmp = utf8_to_utf16(fname);
+                        swprintf(buf, 1024, L"%-*s", colspace, wtmp);
+                        WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), buf, wcslen(buf), 0, 0);
+                        free(wtmp);
 #else
-            printf("%-*s", colspace, fname);
+                        printf("%-*s", colspace, fname);
 #endif
             if (c >= columns) {
 				printf("\n");
@@ -1612,22 +1536,10 @@ parse_dispatch_command(struct sftp_conn *conn, const char *cmd, char **pwd,
 	case I_RM:
 		path1 = make_absolute(path1, *pwd);
 		remote_glob(conn, path1, GLOB_NOCHECK, NULL, &g);
-#ifdef WINDOWS
-		if(g.gl_pathc > 0)
-#endif
-		for (i = 0; g.gl_pathv[i] && !interrupted; i++) {
-            if (!quiet)
-#ifdef WINDOWS
-            {
-                printf("Removing ");
-                wchar_t* wtmp = utf8_to_utf16(g.gl_pathv[i]);
-                WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-                WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-                free(wtmp);
-            }
-#else
-            printf("Removing %s\n", g.gl_pathv[i]);
-#endif
+
+                for (i = 0; g.gl_pathv[i] && !interrupted; i++) {
+                        if (!quiet)
+                                printf("Removing %s\n", g.gl_pathv[i]);
 			err = do_rm(conn, g.gl_pathv[i]);
 			if (err != 0 && err_abort)
 				break;
@@ -1727,17 +1639,7 @@ parse_dispatch_command(struct sftp_conn *conn, const char *cmd, char **pwd,
 		remote_glob(conn, path1, GLOB_NOCHECK, NULL, &g);
 		for (i = 0; g.gl_pathv[i] && !interrupted; i++) {
 			if (!quiet)
-#ifdef WINDOWS
-            {
-                printf("Changing mode on ");
-                wchar_t* wtmp = utf8_to_utf16(g.gl_pathv[i]);
-                WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-                WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-                free(wtmp);
-            }
-#else
-            printf("Changing mode on %s\n", g.gl_pathv[i]);
-#endif
+                                printf("Changing mode on %s\n", g.gl_pathv[i]);
 			err = do_setstat(conn, g.gl_pathv[i], &a);
 			if (err != 0 && err_abort)
 				break;
@@ -1767,33 +1669,13 @@ parse_dispatch_command(struct sftp_conn *conn, const char *cmd, char **pwd,
 			aa->flags &= SSH2_FILEXFER_ATTR_UIDGID;
 			if (cmdnum == I_CHOWN) {
 				if (!quiet)
-#ifdef WINDOWS
-                {
-                    printf("Changing owner on ");
-                    wchar_t* wtmp = utf8_to_utf16(g.gl_pathv[i]);
-                    WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-                    WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-                    free(wtmp);
-                }
-#else
-                printf("Changing owner on %s\n",
-                        g.gl_pathv[i]);
-#endif
+                                        printf("Changing owner on %s\n",
+                                            g.gl_pathv[i]);
 				aa->uid = n_arg;
 			} else {
 				if (!quiet)
-#ifdef WINDOWS
-                {
-                    printf("Changing group on ");
-                    wchar_t* wtmp = utf8_to_utf16(g.gl_pathv[i]);
-                    WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-                    WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-                    free(wtmp);
-                }
-#else
-                    printf("Changing group on %s\n",
-                        g.gl_pathv[i]);
-#endif
+                                        printf("Changing group on %s\n",
+                                            g.gl_pathv[i]);
 				aa->gid = n_arg;
 			}
 			err = do_setstat(conn, g.gl_pathv[i], aa);
@@ -1802,17 +1684,7 @@ parse_dispatch_command(struct sftp_conn *conn, const char *cmd, char **pwd,
 		}
 		break;
 	case I_PWD:
-#ifdef WINDOWS
-        printf("Remote working directory: ");
-        {
-            wchar_t* wtmp = utf8_to_utf16(*pwd);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-            free(wtmp);
-        }
-#else
-        printf("Remote working directory: %s\n", *pwd);
-#endif
+                printf("Remote working directory: %s\n", *pwd);
 		break;
 	case I_LPWD:
 		if (!getcwd(path_buf, sizeof(path_buf))) {
@@ -1820,17 +1692,7 @@ parse_dispatch_command(struct sftp_conn *conn, const char *cmd, char **pwd,
 			err = -1;
 			break;
 		}
-#ifdef WINDOWS
-		printf("Local working directory: ");
-        {
-            wchar_t* wtmp = utf8_to_utf16(path_buf);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-            free(wtmp);
-        }
-#else
-        printf("Local working directory: %s\n", path_buf);
-#endif
+                printf("Local working directory: %s\n", path_buf);
 		break;
 	case I_QUIT:
 		/* Processed below */
@@ -2283,17 +2145,7 @@ interactive_loop(struct sftp_conn *conn, char *file1, char *file2)
 
 		if (remote_is_dir(conn, dir) && file2 == NULL) {
 			if (!quiet)
-#ifdef WINDOWS
-            {
-                printf("Changing to: ");
-                wchar_t* wtmp = utf8_to_utf16(dir);
-                WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-                WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-                free(wtmp);
-            }
-#else
-            printf("Changing to: %s\n", dir);
-#endif
+                                printf("Changing to: %s\n", dir);
 			snprintf(cmd, sizeof cmd, "cd \"%s\"", dir);
 			if (parse_dispatch_command(conn, cmd,
 			    &remote_path, 1) != 0) {
@@ -2318,10 +2170,14 @@ interactive_loop(struct sftp_conn *conn, char *file1, char *file2)
 		free(dir);
 	}
 
-	#ifndef WINDOWS
-	setvbuf(stdout, NULL, _IOLBF, 0);
+#ifdef WINDOWS
+        /* Min buffer size allowed in Windows is 2*/
+        setvbuf(stdout, NULL, _IOLBF, 2);
+        setvbuf(infile, NULL, _IOLBF, 2);
+#else
+        setvbuf(stdout, NULL, _IOLBF, 0);
 	setvbuf(infile, NULL, _IOLBF, 0);
-	#endif
+#endif
 
 	interactive = !batchmode && isatty(STDIN_FILENO);
 	err = 0;

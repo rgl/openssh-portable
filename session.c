@@ -639,21 +639,11 @@ int do_exec_windows(Session *s, const char *command, int pty) {
         * handle the case that fdin and fdout are the same.
         */
 
-        if (compat20)
-        {
-                if (s->ttyfd == -1)
-                        session_set_fds(s, pipein[1], pipeout[0], pipeerr[0], s->is_subsystem, 0);
-                else
-                        session_set_fds(s, pipein[1], pipeout[0], pipeerr[0], s->is_subsystem, 1); // tty interactive session
-        }
+        if (s->ttyfd == -1)
+                session_set_fds(s, pipein[1], pipeout[0], pipeerr[0], s->is_subsystem, 0);
         else
-        {
-                server_loop(pi.dwProcessId, pipein[1], pipeout[0], pipeerr[0]);
+                session_set_fds(s, pipein[1], pipeout[0], pipeerr[0], s->is_subsystem, 1); // tty interactive session
 
-                /*
-                * server_loop has closed inout[0] and err[0].
-                */
-        }
 
         return 0;
 

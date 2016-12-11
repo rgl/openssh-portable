@@ -37,6 +37,8 @@
 #include <time.h>
 #include <assert.h>
 #include <direct.h>
+#include <winioctl.h>
+#include "Shlwapi.h"
 
 /* internal table that stores the fd to w32_io mapping*/
 struct w32fd_table {
@@ -354,14 +356,18 @@ w32_open(const char *pathname, int flags, ...) {
 	if (min_index == -1)
 		return -1;
 
-	pio = fileio_open(pathname, flags, 0);
+	// Skip the first '/' in the pathname
+	char resolvedPathName[MAX_PATH];
+	realpathWin32i(pathname, resolvedPathName);
+
+	pio = fileio_open(resolvedPathName, flags, 0);
 	if (pio == NULL)
 		return -1;
 
 	pio->type = NONSOCK_FD;
 	fd_table_set(pio, min_index);
 	debug("open - handle:%p, io:%p, fd:%d", pio->handle, pio, min_index);
-	debug3("open - path:%s", pathname);
+	debug3("open - path:%s", resolvedPathName);
 	return min_index;
 }
 
@@ -410,7 +416,11 @@ w32_fstat(int fd, struct w32_stat *buf) {
 
 int
 w32_stat(const char *path, struct w32_stat *buf) {
-	return fileio_stat(path, (struct _stat64*)buf);
+	// Skip the first '/' in the pathname
+	char resolvedPathName[MAX_PATH];
+	realpathWin32i(path, resolvedPathName);
+		
+	return fileio_stat(resolvedPathName, (struct _stat64*)buf);
 }
 
 long 
@@ -421,12 +431,47 @@ w32_lseek(int fd, long offset, int origin) {
 
 int 
 w32_mkdir(const char *path_utf8, unsigned short mode) {
-    wchar_t *path_utf16 = utf8_to_utf16(path_utf8);
+	// Skip the first '/' in the pathname
+	char resolvedPathName[MAX_PATH];
+	realpathWin32i(path_utf8, resolvedPathName);
+
+    wchar_t *path_utf16 = utf8_to_utf16(resolvedPathName);
     if (path_utf16 == NULL) {
         errno = ENOMEM;
         return -1;
     }
     return _wmkdir(path_utf16);
+}
+
+int 
+w32_rename(const char *old_name, const char *new_name) {
+	// Skip the first '/' in the pathname
+	char resolvedOldPathName[MAX_PATH];
+	realpathWin32i(old_name, resolvedOldPathName);
+
+	// Skip the first '/' in the pathname
+	char resolvedNewPathName[MAX_PATH];
+	realpathWin32i(new_name, resolvedNewPathName);
+
+	return rename(resolvedOldPathName, resolvedNewPathName);
+}
+
+int
+w32_rmdir(const char *path) {
+	// Skip the first '/' in the pathname
+	char resolvedPathName[MAX_PATH];
+	realpathWin32i(path, resolvedPathName);
+
+	return _rmdir(resolvedPathName);
+}
+
+int
+w32_unlink(const char *path) {
+	// Skip the first '/' in the pathname
+	char resolvedPathName[MAX_PATH];
+	realpathWin32i(path, resolvedPathName);
+
+	return _unlink(resolvedPathName);
 }
 
 int w32_chdir(const char *dirname_utf8) {
@@ -534,24 +579,33 @@ int
 w32_fcntl(int fd, int cmd, ... /* arg */) {
 	va_list valist;
 	va_start(valist, cmd);
+        int ret = 0;
 
 	CHECK_FD(fd);
 
 	switch (cmd) {
 	case F_GETFL:
-		return fd_table.w32_ios[fd]->fd_status_flags;
+		ret = fd_table.w32_ios[fd]->fd_status_flags;
+                break;
 	case F_SETFL:
 		fd_table.w32_ios[fd]->fd_status_flags = va_arg(valist, int);
-		return 0;
+		ret = 0;
+                break;
 	case F_GETFD:
-		return fd_table.w32_ios[fd]->fd_flags;		
+		ret = fd_table.w32_ios[fd]->fd_flags;		
+                break;
 	case F_SETFD:
-		return w32_io_process_fd_flags(fd_table.w32_ios[fd], va_arg(valist, int));		
+		ret =  w32_io_process_fd_flags(fd_table.w32_ios[fd], va_arg(valist, int));		
+                break;
 	default:
 		errno = EINVAL;
 		debug("fcntl - ERROR not supported cmd:%d", cmd);
-		return -1;
-	}
+		ret = -1;
+                break;
+        }
+
+        va_end(valist);
+        return ret;
 }
 
 #define SELECT_EVENT_LIMIT 32
@@ -871,4 +925,173 @@ int w32_fsync(int fd) {
     CHECK_FD(fd);
 
     return FlushFileBuffers(w32_fd_to_handle(fd));
+}
+
+char *realpathWin32(const char *path, char resolved[MAX_PATH])
+{
+	char realpath[MAX_PATH];
+
+	strlcpy(resolved, path + 1, sizeof(realpath));
+	backslashconvert(resolved);
+	PathCanonicalizeA(realpath, resolved);
+	slashconvert(realpath);
+
+	/*
+	* Store terminating slash in 'X:/' on Windows.
+	*/
+
+	if (realpath[1] == ':' && realpath[2] == 0)
+	{
+		realpath[2] = '/';
+		realpath[3] = 0;
+	}
+
+	resolved[0] = *path; // will be our first slash in /x:/users/test1 format
+	strncpy(resolved + 1, realpath, sizeof(realpath) - 1);
+	return resolved;
+}
+
+// like realpathWin32() but takes out the first slash so that windows systems can work on the actual file or directory
+char *realpathWin32i(const char *path, char resolved[MAX_PATH])
+{
+	char realpath[MAX_PATH];
+
+	if (path[0] != '/') {
+		// absolute form x:/abc/def given, no first slash to take out
+		strlcpy(resolved, path, sizeof(realpath));
+	}
+	else
+		strlcpy(resolved, path + 1, sizeof(realpath));
+
+	backslashconvert(resolved);
+	PathCanonicalizeA(realpath, resolved);
+	slashconvert(realpath);
+
+	/*
+	* Store terminating slash in 'X:/' on Windows.
+	*/
+
+	if (realpath[1] == ':' && realpath[2] == 0)
+	{
+		realpath[2] = '/';
+		realpath[3] = 0;
+	}
+
+	strncpy(resolved, realpath, sizeof(realpath));
+	return resolved;
+}
+
+BOOL ResolveLink(wchar_t * tLink, wchar_t *ret, DWORD * plen, DWORD Flags)
+{
+	HANDLE   fileHandle;
+	BYTE     reparseBuffer[MAX_REPARSE_SIZE];
+	PBYTE    reparseData;
+	PREPARSE_GUID_DATA_BUFFER reparseInfo = (PREPARSE_GUID_DATA_BUFFER)reparseBuffer;
+	PREPARSE_DATA_BUFFER msReparseInfo = (PREPARSE_DATA_BUFFER)reparseBuffer;
+	DWORD   returnedLength;
+
+	if (Flags & FILE_ATTRIBUTE_DIRECTORY)
+	{
+		fileHandle = CreateFileW(tLink, 0,
+			FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+			OPEN_EXISTING,
+			FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, 0);
+
+	}
+	else {
+
+		//    
+		// Open the file    
+		//    
+		fileHandle = CreateFileW(tLink, 0,
+			FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+			OPEN_EXISTING,
+			FILE_FLAG_OPEN_REPARSE_POINT, 0);
+	}
+	if (fileHandle == INVALID_HANDLE_VALUE)
+	{
+		swprintf_s(ret, *plen, L"%ls", tLink);
+		return TRUE;
+	}
+
+	if (GetFileAttributesW(tLink) & FILE_ATTRIBUTE_REPARSE_POINT) {
+
+		if (DeviceIoControl(fileHandle, FSCTL_GET_REPARSE_POINT,
+			NULL, 0, reparseInfo, sizeof(reparseBuffer),
+			&returnedLength, NULL)) {
+
+			if (IsReparseTagMicrosoft(reparseInfo->ReparseTag)) {
+
+				switch (reparseInfo->ReparseTag) {
+				case 0x80000000 | IO_REPARSE_TAG_SYMBOLIC_LINK:
+				case IO_REPARSE_TAG_MOUNT_POINT:
+					if (*plen >= msReparseInfo->MountPointReparseBuffer.SubstituteNameLength)
+					{
+						reparseData = (PBYTE)&msReparseInfo->SymbolicLinkReparseBuffer.PathBuffer;
+						WCHAR temp[1024];
+						wcsncpy_s(temp, 1024,
+							(PWCHAR)(reparseData + msReparseInfo->MountPointReparseBuffer.SubstituteNameOffset),
+							(size_t)msReparseInfo->MountPointReparseBuffer.SubstituteNameLength);
+						temp[msReparseInfo->MountPointReparseBuffer.SubstituteNameLength] = 0;
+						swprintf_s(ret, *plen, L"%ls", &temp[4]);
+					}
+					else
+					{
+						swprintf_s(ret, *plen, L"%ls", tLink);
+						return FALSE;
+					}
+
+					break;
+				default:
+					break;
+				}
+			}
+		}
+	}
+	else {
+		swprintf_s(ret, *plen, L"%ls", tLink);
+	}
+
+	CloseHandle(fileHandle);
+	return TRUE;
+}
+
+char * get_inside_path(char * opath, BOOL bResolve, BOOL bMustExist)
+{
+	char * ipath;
+	char * temp_name;
+	wchar_t temp[1024];
+	DWORD templen = 1024;
+	WIN32_FILE_ATTRIBUTE_DATA  FileInfo;
+
+	wchar_t* opath_w = utf8_to_utf16(opath);
+	if (!GetFileAttributesExW(opath_w, GetFileExInfoStandard, &FileInfo) && bMustExist)
+	{
+		free(opath_w);
+		return NULL;
+	}
+
+	if (bResolve)
+	{
+		ResolveLink(opath_w, temp, &templen, FileInfo.dwFileAttributes);
+		ipath = utf16_to_utf8(temp);
+	}
+	else
+	{
+		ipath = xstrdup(opath);
+	}
+
+	free(opath_w);
+	return ipath;
+}
+
+// if file is symbolic link, copy its link into "link" .
+int readlink(const char *path, char *link, int linklen)
+{
+	// Skip the first '/' in the pathname
+	char resolvedPathName[MAX_PATH];
+	realpathWin32i(path, resolvedPathName);
+
+	strcpy_s(link, linklen, resolvedPathName);
+	return 0;
 }

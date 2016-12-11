@@ -31,6 +31,7 @@
 #include <Windows.h>
 #include <stdio.h>
 #include "inc\defs.h"
+#include "sys\stat.h"
 #include "inc\sys\statvfs.h"
 #include "inc\sys\time.h"
 #include <time.h>
@@ -333,4 +334,116 @@ spawn_child(char* cmd, int in, int out, int err, DWORD flags) {
 
 	free(cmd_utf16);
 	return pi.dwProcessId;
+}
+
+void
+strmode(mode_t mode, char *p)
+{
+	/* print type */
+	switch (mode & S_IFMT) {
+	case S_IFDIR:			/* directory */
+		*p++ = 'd';
+		break;
+	case S_IFCHR:			/* character special */
+		*p++ = 'c';
+		break;
+		//case S_IFBLK:			/* block special */
+		//		*p++ = 'b';
+		//		break;
+	case S_IFREG:			/* regular */
+		*p++ = '-';
+		break;
+		//case S_IFLNK:			/* symbolic link */
+		//		*p++ = 'l';
+		//		break;
+#ifdef S_IFSOCK
+	case S_IFSOCK:			/* socket */
+		*p++ = 's';
+		break;
+#endif
+	case _S_IFIFO:			/* fifo */
+		*p++ = 'p';
+		break;
+	default:			/* unknown */
+		*p++ = '?';
+		break;
+	}
+	
+	// The below code is commented as the group, other is not applicable on the windows.
+	// This will be properly fixed in next releases.
+	// As of now we are keeping "*" for everything.
+	const char *permissions = "********* ";
+	strncpy(p, permissions, strlen(permissions) + 1);
+	p = p + strlen(p);
+	///* usr */
+	//if (mode & S_IRUSR)
+	//	*p++ = 'r';
+	//else
+	//	*p++ = '-';
+	//if (mode & S_IWUSR)
+	//	*p++ = 'w';
+	//else
+	//	*p++ = '-';
+	//switch (mode & (S_IXUSR)) {
+	//case 0:
+	//	*p++ = '-';
+	//	break;
+	//case S_IXUSR:
+	//	*p++ = 'x';
+	//	break;
+	//	//case S_ISUID:
+	//	//		*p++ = 'S';
+	//	//		break;
+	//	//case S_IXUSR | S_ISUID:
+	//	//		*p++ = 's';
+	//	//		break;
+	//}
+	///* group */
+	//if (mode & S_IRGRP)
+	//	*p++ = 'r';
+	//else
+	//	*p++ = '-';
+	//if (mode & S_IWGRP)
+	//	*p++ = 'w';
+	//else
+	//	*p++ = '-';
+	//switch (mode & (S_IXGRP)) {
+	//case 0:
+	//	*p++ = '-';
+	//	break;
+	//case S_IXGRP:
+	//	*p++ = 'x';
+	//	break;
+	//	//case S_ISGID:
+	//	//		*p++ = 'S';
+	//	//		break;
+	//	//case S_IXGRP | S_ISGID:
+	//	//		*p++ = 's';
+	//	//		break;
+	//}
+	///* other */
+	//if (mode & S_IROTH)
+	//	*p++ = 'r';
+	//else
+	//	*p++ = '-';
+	//if (mode & S_IWOTH)
+	//	*p++ = 'w';
+	//else
+	//	*p++ = '-';
+	//switch (mode & (S_IXOTH)) {
+	//case 0:
+	//	*p++ = '-';
+	//	break;
+	//case S_IXOTH:
+	//	*p++ = 'x';
+	//	break;
+	//}
+	//*p++ = ' ';		/* will be a '+' if ACL's implemented */
+	*p = '\0';
+}
+
+int 
+w32_chmod(const char *pathname, mode_t mode) {
+        /* TODO - implement this */
+        return 0;
 }
