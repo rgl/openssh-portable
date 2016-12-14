@@ -186,7 +186,7 @@ enum
 /* TODO - is this the right place for these defs ?*/
 # define S_ISUID            0x800 
 # define S_ISGID            0x400
-#endif
+#endif /* WINDOWS */
 #endif /* S_IXUSR */
 
 #if !defined(MAP_ANON) && defined(MAP_ANONYMOUS)
@@ -798,7 +798,7 @@ struct winsize {
 
 #ifdef WINDOWS
 # define CUSTOM_SYS_AUTH_PASSWD 1
-#endif
+#endif /* WINDOWS */
 
 /* HP-UX 11.11 */
 #ifdef BTMP_FILE

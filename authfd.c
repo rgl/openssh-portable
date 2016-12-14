@@ -137,7 +137,7 @@ ssh_get_authentication_socket(int *fdp)
 			return SSH_ERR_SYSTEM_ERROR;
 		}
 	}
-#else
+#else  /* !WINDOWS */
 	authsocket = getenv(SSH_AUTHSOCKET_ENV_NAME);
 	if (!authsocket)
 		return SSH_ERR_AGENT_NOT_PRESENT;
@@ -157,7 +157,7 @@ ssh_get_authentication_socket(int *fdp)
 		errno = oerrno;
 		return SSH_ERR_SYSTEM_ERROR;
 	}
-#endif
+#endif  /* !WINDOWS */
 
 	if (fdp != NULL)
 		*fdp = sock;
@@ -170,9 +170,9 @@ ssh_get_authentication_socket(int *fdp)
 #ifdef WINDOWS
 /* for Windows we need to access this function from other places to talk to agent*/
 int
-#else
+#else /* !WINDOWS */
 static int
-#endif
+#endif /* !WINDOWS */
 ssh_request_reply(int sock, struct sshbuf *request, struct sshbuf *reply)
 {
 	int r;

@@ -108,7 +108,7 @@ ssh_proxy_fdpass_connect(const char *host, u_short port,
 #ifdef WINDOWS
         fatal("proxy fdpass connect is not supported in Windows");
         return 0;
-#else
+#else /* !WINDOWS */
 	char *command_string;
 	int sp[2], sock;
 	pid_t pid;
@@ -180,7 +180,7 @@ ssh_proxy_fdpass_connect(const char *host, u_short port,
 	packet_set_connection(sock, sock);
 
 	return 0;
-#endif
+#endif /* !WINDOWS */
 }
 
 /*
@@ -192,7 +192,7 @@ ssh_proxy_connect(const char *host, u_short port, const char *proxy_command)
 #ifdef WINDOWS
         fatal("Proxy connect is not supported in Windows");
         return 0;
-#else
+#else /* !WINDOWS */
 	char *command_string;
 	int pin[2], pout[2];
 	pid_t pid;
@@ -262,7 +262,7 @@ ssh_proxy_connect(const char *host, u_short port, const char *proxy_command)
 
 	/* Indicate OK return */
 	return 0;
-#endif
+#endif /* !WINDOWS */
 }
 
 void
@@ -1494,7 +1494,7 @@ ssh_local_cmd(const char *args)
 #ifdef WINDOWS
         fatal("executing local command is not supported in Windows");
         return 0;
-#else
+#else /* !WINDOWS */
 	char *shell;
 	pid_t pid;
 	int status;
@@ -1527,7 +1527,7 @@ ssh_local_cmd(const char *args)
 		return (1);
 
 	return (WEXITSTATUS(status));
-#endif 
+#endif  /* !WINDOWS */
 }
 
 void
