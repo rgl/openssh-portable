@@ -312,7 +312,7 @@ static void printf_utf8(char *fmt,  ... ) {
 }
 
 #define printf(a,...)		printf_utf8((a), __VA_ARGS__)
-#endif
+#endif   /* WINDOWS */
 
 static void
 local_do_shell(const char *args)

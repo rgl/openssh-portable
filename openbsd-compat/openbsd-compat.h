@@ -237,7 +237,7 @@ long long strtonum(const char *, long long, long long, const char **);
 # undef HAVE_NL_LANGINFO
 #ifndef WINDOWS
 # undef HAVE_MBTOWC
-#endif
+#endif  /* WINDOWS */
 # undef HAVE_LANGINFO_H
 #endif
 
