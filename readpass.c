@@ -68,15 +68,8 @@ ssh_askpass(char *askpass, const char *msg)
 	osigchld = signal(SIGCHLD, SIG_DFL);
 #ifdef WINDOWS 
 	/* spawd child for Windows */
-	pid = -1;
-	{
-		PROCESS_INFORMATION pi = { 0 };
-		STARTUPINFOW si = { 0 };
-		
-		fcntl(p[0], F_SETFD, FD_CLOEXEC);
-
-		pid = spawn_child(askpass, p[1], p[1], STDERR_FILENO, 0);
-	}
+	fcntl(p[0], F_SETFD, FD_CLOEXEC);
+	pid = spawn_child(askpass, p[1], p[1], STDERR_FILENO, 0);
 	if (pid < 0) {
 #else  /* !WINDOWS */
 	if ((pid = fork()) < 0) {
@@ -153,7 +146,9 @@ read_passphrase(const char *prompt, int flags)
 	}
 
 	/* prompt user */
-	_cputws(utf8_to_utf16(prompt));
+	wchar_t* wtmp = utf8_to_utf16(prompt);
+	_cputws(wtmp);
+	free(wtmp);
 
 	len = retr = 0;
 	int bufsize = sizeof(buf);

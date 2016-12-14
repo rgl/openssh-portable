@@ -39,6 +39,7 @@
 #include <direct.h>
 #include <winioctl.h>
 #include "Shlwapi.h"
+#include <sys\utime.h>
 
 /* internal table that stores the fd to w32_io mapping*/
 struct w32fd_table {
@@ -373,7 +374,7 @@ w32_open(const char *pathname, int flags, ...) {
 
 int
 w32_read(int fd, void *dst, size_t max) {
-        CHECK_FD(fd);
+	CHECK_FD(fd);
 
 	if (fd_table.w32_ios[fd]->type == SOCK_FD)
 		return socketio_recv(fd_table.w32_ios[fd], dst, max, 0);
@@ -429,74 +430,6 @@ w32_lseek(int fd, long offset, int origin) {
 	return fileio_lseek(fd_table.w32_ios[fd], offset, origin);
 }
 
-int 
-w32_mkdir(const char *path_utf8, unsigned short mode) {
-	// Skip the first '/' in the pathname
-	char resolvedPathName[MAX_PATH];
-	realpathWin32i(path_utf8, resolvedPathName);
-
-    wchar_t *path_utf16 = utf8_to_utf16(resolvedPathName);
-    if (path_utf16 == NULL) {
-        errno = ENOMEM;
-        return -1;
-    }
-    return _wmkdir(path_utf16);
-}
-
-int 
-w32_rename(const char *old_name, const char *new_name) {
-	// Skip the first '/' in the pathname
-	char resolvedOldPathName[MAX_PATH];
-	realpathWin32i(old_name, resolvedOldPathName);
-
-	// Skip the first '/' in the pathname
-	char resolvedNewPathName[MAX_PATH];
-	realpathWin32i(new_name, resolvedNewPathName);
-
-	return rename(resolvedOldPathName, resolvedNewPathName);
-}
-
-int
-w32_rmdir(const char *path) {
-	// Skip the first '/' in the pathname
-	char resolvedPathName[MAX_PATH];
-	realpathWin32i(path, resolvedPathName);
-
-	return _rmdir(resolvedPathName);
-}
-
-int
-w32_unlink(const char *path) {
-	// Skip the first '/' in the pathname
-	char resolvedPathName[MAX_PATH];
-	realpathWin32i(path, resolvedPathName);
-
-	return _unlink(resolvedPathName);
-}
-
-int w32_chdir(const char *dirname_utf8) {
-    wchar_t *dirname_utf16 = utf8_to_utf16(dirname_utf8);
-    if (dirname_utf16 == NULL) {
-        errno = ENOMEM;
-        return -1;
-    }
-
-    return _wchdir(dirname_utf16);
-}
-
-char *w32_getcwd(char *buffer, int maxlen) {
-    wchar_t wdirname[MAX_PATH];
-    char* putf8 = NULL;
-
-    wchar_t *wpwd = _wgetcwd(&wdirname[0], MAX_PATH);
-
-    if ((putf8 = utf16_to_utf8(&wdirname[0])) == NULL)
-            fatal("failed to convert input arguments");
-    strcpy(buffer, putf8);
-    free(putf8);
-
-    return buffer;
-}
 
 int
 w32_isatty(int fd) {
@@ -1055,7 +988,7 @@ BOOL ResolveLink(wchar_t * tLink, wchar_t *ret, DWORD * plen, DWORD Flags)
 	CloseHandle(fileHandle);
 	return TRUE;
 }
-
+char	*xstrdup(const char *);
 char * get_inside_path(char * opath, BOOL bResolve, BOOL bMustExist)
 {
 	char * ipath;
