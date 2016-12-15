@@ -471,11 +471,6 @@ w32_chmod(const char *pathname, mode_t mode) {
     return -1;
 }
 
-char* 
-w32_strcasestr(const char *string, const char *subString) {
-	return StrStrI(string, subString);
-}
-
 int 
 w32_chown(const char *pathname, unsigned int owner, unsigned int group) {
 	/* TODO - implement this */
