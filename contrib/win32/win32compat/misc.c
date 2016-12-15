@@ -153,7 +153,7 @@ int statvfs(const char *path, struct statvfs *buf) {
 }
 
 int fstatvfs(int fd, struct statvfs *buf) {
-	errno = ENOSYS;
+	errno = ENOTSUP;
 	return -1;
 }
 
