@@ -592,6 +592,24 @@ main(int argc, char **argv)
 	remin = STDIN_FILENO;
 	remout = STDOUT_FILENO;
 
+#ifdef WINDOWS
+	/* 
+	 * To support both Windows and Unix styles paths
+	 * convert '\\' to '/' in rest of arguments 
+	 */
+	{
+		char *s1, *s2;
+		int i;
+		for (i = 0; i < argc; i++) {
+			s1 = argv[i];
+			while ((s2 = strchr(s1, '\\')) != NULL) {
+				*s2 = '/';
+				s1 = s2 + 1;
+			}
+		}		
+	}
+#endif
+
 	if (fflag) {
 		/* Follow "protocol", send data. */
 		(void) response();
@@ -807,6 +825,47 @@ tolocal(int argc, char **argv)
 	for (i = 0; i < argc - 1; i++) {
 		if (!(src = colon(argv[i]))) {	/* Local to local. */
 			freeargs(&alist);
+#ifdef WINDOWS
+			/* local to local on windows - need to use local native copy command */
+#define _PATH_XCOPY "xcopy"
+#define _PATH_COPY "copy"
+			struct stat stb;
+			int exists;
+
+			exists = stat(argv[i], &stb) == 0;
+			if (exists && (S_ISDIR(stb.st_mode))) {
+				addargs(&alist, "%s", _PATH_XCOPY);
+				if (iamrecursive)
+					addargs(&alist, "/S /E /H");
+				if (pflag)
+					addargs(&alist, "/K /X");
+				addargs(&alist, "/Y /F /I");
+				addargs(&alist, "%s", argv[i]);
+
+				char *lastf = NULL, *lastr = NULL, *name;
+				if ((lastf = strrchr(argv[i], '/')) == NULL && (lastr = strrchr(argv[i], '\\')) == NULL)
+					name = argv[i];
+				else {
+					if (lastf)
+						name = lastf;
+					if (lastr)
+						name = lastr;
+					++name;
+				}
+
+				char * dest = argv[argc - 1];
+				int len = strlen(dest);
+				char * lastletter = dest + len - 1;
+
+				addargs(&alist, "%s%s%s", argv[argc - 1],
+					(lastletter == "\\" || lastletter == "/") ? "" : "\\", name);
+			} else {
+				addargs(&alist, "%s", _PATH_COPY);
+				addargs(&alist, "/Y");
+				addargs(&alist, "%s", argv[i]);
+				addargs(&alist, "%s", argv[argc - 1]);
+			}
+#else  /* !WINDOWS */
 			addargs(&alist, "%s", _PATH_CP);
 			if (iamrecursive)
 				addargs(&alist, "-r");
@@ -815,6 +874,7 @@ tolocal(int argc, char **argv)
 			addargs(&alist, "--");
 			addargs(&alist, "%s", argv[i]);
 			addargs(&alist, "%s", argv[argc-1]);
+#endif /* !WINDOWS */
 			if (do_local_cmd(&alist))
 				++errs;
 			continue;
