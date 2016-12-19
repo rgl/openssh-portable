@@ -577,7 +577,7 @@ auth_openfile(const char *file, struct passwd *pw, int strict_modes,
 	struct stat st;
 	int fd;
 	FILE *f;
-	
+
 #ifdef WINDOWS
         /* Windows POSIX adpater does not support fdopen() on open(file)*/
         if ((f = fopen(file, "r")) == NULL) {
@@ -617,6 +617,7 @@ auth_openfile(const char *file, struct passwd *pw, int strict_modes,
 		return NULL;
 	}
 #endif  /* !WINDOWS */
+
 	return f;
 }
 
