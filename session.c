@@ -296,7 +296,7 @@ xauth_valid_string(const char *s)
  * do_exec* on Windows
  * - Read and set user environment variables from registry
  * - Build subsystem cmdline path
- * - Interative shell/commands are executed using ssh-shellhost.exe
+ * - Interactive shell/commands are executed using ssh-shellhost.exe
  * - ssh-shellhost.exe implements server-side PTY for Windows
  */
 #include <Shlobj.h>

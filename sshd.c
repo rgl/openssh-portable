@@ -166,9 +166,9 @@ int rexeced_flag = 0;
 #ifdef WINDOWS
 /* rexec is not supported in Windows */
 int rexec_flag = 0;
-#else
+#else /* !WINDOWS */
 int rexec_flag = 1;
-#endif
+#endif /* !WINDOWS */
 int rexec_argc = 0;
 char **rexec_argv;
 

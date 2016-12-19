@@ -245,7 +245,7 @@ userauth_pubkey(Authctxt *authctxt)
 		 * if a user is not allowed to login. is this an
 		 * issue? -markus
 		 */
-#ifndef WINDOWS
+#ifndef WINDOWS /* key validation in done in agent for Windows */
 		if (PRIVSEP(user_key_allowed(authctxt->pw, key, 0)))  
 #endif  /* !WINDOWS */
 		{
