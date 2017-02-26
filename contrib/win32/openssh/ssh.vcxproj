@@ -202,6 +202,7 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\mux.c" />
     <ClInclude Include="$(OpenSSH-Src-Path)acss.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)atomicio.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)audit.h" />

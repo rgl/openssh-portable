@@ -29,6 +29,7 @@
 */
 
 #include "inc\sys\types.h"
+#include "inc\termios.h"
 
 /* uuidswap.c defs */
 void
@@ -51,35 +52,6 @@ restore_uid(void)
 
 void
 permanently_set_uid(struct passwd *pw)
-{
-	return;
-}
-
-
-/* mux.c defs */
-int muxserver_sock = -1;
-typedef struct Channel Channel;
-unsigned int muxclient_command = 0;
-void
-muxserver_listen(void)
-{
-	return;
-}
-
-void
-mux_exit_message(Channel *c, int exitval)
-{
-	return;
-}
-
-void
-mux_tty_alloc_failed(Channel *c)
-{
-	return;
-}
-
-void
-muxclient(const char *path)
 {
 	return;
 }
@@ -121,3 +93,9 @@ startup_handler(void)
 	return 0;
 }
 
+
+int 
+tcgetattr(int fd, struct termios *termios_p) {
+	memset(termios_p, 0, sizeof(struct termios));
+	return 0;
+}

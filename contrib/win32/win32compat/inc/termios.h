@@ -107,4 +107,6 @@ struct termios
   speed_t	c_ospeed;
 };
 
+int tcgetattr(int fd, struct termios *termios_p);
+
 #endif

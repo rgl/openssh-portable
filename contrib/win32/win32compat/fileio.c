@@ -94,18 +94,17 @@ fileio_connect(struct w32_io* pio, char* name)
 	wchar_t* name_w = NULL;
 	wchar_t pipe_name[PATH_MAX];
 	HANDLE h = INVALID_HANDLE_VALUE;
-	int ret = 0;
+	int ret = -1;
 
 	if (pio->handle != 0 && pio->handle != INVALID_HANDLE_VALUE) {
 		debug("fileio_connect called in unexpected state, pio = %p", pio);
 		errno = EOTHER;
-		ret = -1;
 		goto cleanup;
 	}
 
 	if ((name_w = utf8_to_utf16(name)) == NULL) {
 		errno = ENOMEM;
-		return -1;
+		goto cleanup;
 	}
 	_snwprintf(pipe_name, PATH_MAX, L"\\\\.\\pipe\\%ls", name_w);
 	h = CreateFileW(pipe_name, GENERIC_READ | GENERIC_WRITE, 0, 
@@ -122,7 +121,6 @@ fileio_connect(struct w32_io* pio, char* name)
 	if (h == INVALID_HANDLE_VALUE) {
 		debug("unable to connect to pipe %ls, error: %d", name_w, GetLastError());
 		errno = errno_from_Win32LastError();
-		ret = -1;
 		goto cleanup;
 	}
 
@@ -130,16 +128,101 @@ fileio_connect(struct w32_io* pio, char* name)
 	    pio->fd_flags & FD_CLOEXEC ? 0 : HANDLE_FLAG_INHERIT) == FALSE) {
 		errno = errno_from_Win32LastError();
 		debug("SetHandleInformation failed, error = %d, pio = %p", GetLastError(), pio);
-		ret = -1;
 		goto cleanup;
 	}
 	
 	pio->handle = h;
-	h = NULL;
+	h = INVALID_HANDLE_VALUE;
+	ret = 0;
 
 cleanup:
 	if (name_w)
 		free(name_w);
+	if (h != INVALID_HANDLE_VALUE)
+		CloseHandle(h);
+	return ret;
+}
+
+struct pipe_listener_info {
+	wchar_t* name;
+	HANDLE owner;
+	HANDLE client;
+};
+
+int
+fileio_bind(struct w32_io* pio, char* name) 
+{
+	wchar_t* name_w = NULL;
+	struct pipe_listener_info* info = NULL;
+	int ret = -1;
+
+	if ((name_w = utf8_to_utf16(name)) == NULL ||
+	    (info = malloc(sizeof(struct pipe_listener_info))) == NULL) {
+		errno = ENOMEM;
+		goto cleanup;
+	}
+
+	memset(info, 0, sizeof(struct pipe_listener_info));
+	info->name = name_w;
+	pio->internal.context = info;
+	info = NULL;
+	pio->internal.state = SOCK_BOUND;
+	ret = 0;
+
+cleanup:
+	return ret;
+}
+
+int 
+fileio_listen(struct w32_io* pio, int backlog) 
+{
+	/* TODO - save caller token info */
+	pio->internal.state = SOCK_LISTENING;
+	return 0;
+}
+
+
+#define BUFSIZE 5 * 1024
+int 
+fileio_initiate_accept(struct w32_io* pio) 
+{
+	wchar_t pipe_name[PATH_MAX];
+	HANDLE h = INVALID_HANDLE_VALUE;
+	int ret = -1;
+	struct pipe_listener_info* info = (struct pipe_listener_info*)pio->internal.context;
+
+	if ((pio->handle != 0 && pio->handle != INVALID_HANDLE_VALUE) ||
+	    pio->internal.state != SOCK_LISTENING ||  info == NULL) {
+		debug("fileio_bind called in unexpected state, pio = %p", pio);
+		errno = EOTHER;
+		goto cleanup;
+	}
+
+	_snwprintf(pipe_name, PATH_MAX, L"\\\\.\\pipe\\%ls", info->name);
+
+	h = CreateNamedPipeW(
+		pipe_name,		  // pipe name 
+		PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,       // read/write access 
+		PIPE_TYPE_BYTE |       // message type pipe 
+		PIPE_READMODE_BYTE |   // message-read mode 
+		PIPE_WAIT,                // blocking mode 
+		PIPE_UNLIMITED_INSTANCES, // max. instances  
+		BUFSIZE,                  // output buffer size 
+		BUFSIZE,                  // input buffer size 
+		0,                        // client time-out 
+		NULL);  /*TODO - set this to creater owner only*/
+
+	if (h == INVALID_HANDLE_VALUE) {
+		verbose("cannot create listener pipe ERROR:%d", GetLastError());
+		errno = errno_from_Win32LastError();
+		goto cleanup;
+	}
+
+	pio->handle = h;
+	h = INVALID_HANDLE_VALUE;
+	ret = 0;
+
+cleanup:
 	if (h != INVALID_HANDLE_VALUE)
 		CloseHandle(h);
 	return ret;

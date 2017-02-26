@@ -290,6 +290,11 @@ int
 w32_bind(int fd, const struct sockaddr *name, int namelen)
 {
 	CHECK_FD(fd);
+	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
+		struct sockaddr_un* addr = (struct sockaddr_un*)name;
+		return fileio_bind(fd_table.w32_ios[fd], addr->sun_path);
+	}
+
 	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
 	return socketio_bind(fd_table.w32_ios[fd], name, namelen);
 }
@@ -298,7 +303,6 @@ int
 w32_connect(int fd, const struct sockaddr* name, int namelen)
 {
 	CHECK_FD(fd);
-
 	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
 		struct sockaddr_un* addr = (struct sockaddr_un*)name;
 		return fileio_connect(fd_table.w32_ios[fd], addr->sun_path);
