@@ -229,18 +229,25 @@ int
 w32_accept(int fd, struct sockaddr* addr, int* addrlen)
 {
 	CHECK_FD(fd);
-	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
 	int min_index = fd_table_get_min_index();
 	struct w32_io* pio = NULL;
 
 	if (min_index == -1)
 		return -1;
 
-	pio = socketio_accept(fd_table.w32_ios[fd], addr, addrlen);
-	if (!pio)
-		return -1;
-
-	pio->type = SOCK_FD;
+	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) { 
+		pio = fileio_accept(fd_table.w32_ios[fd]);
+		if (!pio)
+			return -1;
+		pio->type = NONSOCK_FD;
+	} else {
+		CHECK_SOCK_IO(fd_table.w32_ios[fd]);
+		pio = socketio_accept(fd_table.w32_ios[fd], addr, addrlen);
+		if (!pio)
+			return -1;
+		pio->type = SOCK_FD;
+	}
+	
 	fd_table_set(pio, min_index);
 	debug("socket:%d, io:%p, fd:%d ", pio->sock, pio, min_index);
 	return min_index;
@@ -282,6 +289,10 @@ int
 w32_listen(int fd, int backlog)
 {
 	CHECK_FD(fd);
+	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
+		return fileio_listen(fd_table.w32_ios[fd], backlog);
+	}
+
 	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
 	return socketio_listen(fd_table.w32_ios[fd], backlog);
 }
@@ -642,8 +653,7 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 	for (int i = 0; i < fds; i++) {
 		if (readfds && FD_ISSET(i, readfds)) {
 			w32_io_on_select(fd_table.w32_ios[i], TRUE);
-			if ((fd_table.w32_ios[i]->type == SOCK_FD) &&
-			    (fd_table.w32_ios[i]->internal.state == SOCK_LISTENING)) {
+			if (fd_table.w32_ios[i]->internal.state == SOCK_LISTENING) {
 				if (num_events == SELECT_EVENT_LIMIT) {
 					debug("select - ERROR: max #events breach");
 					errno = ENOMEM;

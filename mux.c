@@ -1268,6 +1268,11 @@ muxserver_listen(void)
 
 	debug("setting up multiplex master socket");
 
+#ifdef WINDOWS
+	options.control_path = NULL;
+	xasprintf(&options.control_path, "%s", orig_control_path);
+
+#else /* !WINDOWS */
 	/*
 	 * Use a temporary path before listen so we can pseudo-atomically
 	 * establish the listening socket in its final location to avoid
@@ -1284,6 +1289,7 @@ muxserver_listen(void)
 	options.control_path = NULL;
 	xasprintf(&options.control_path, "%s.%s", orig_control_path, rbuf);
 	debug3("%s: temporary control path %s", __func__, options.control_path);
+#endif
 
 	old_umask = umask(0177);
 	muxserver_sock = unix_listener(options.control_path, 64, 0);
@@ -1309,6 +1315,7 @@ muxserver_listen(void)
 		}
 	}
 
+#ifndef WINDOWS
 	/* Now atomically "move" the mux socket into position */
 	if (link(options.control_path, orig_control_path) != 0) {
 		if (errno != EEXIST) {
@@ -1324,6 +1331,7 @@ muxserver_listen(void)
 	unlink(options.control_path);
 	free(options.control_path);
 	options.control_path = orig_control_path;
+#endif
 
 	set_nonblock(muxserver_sock);
 

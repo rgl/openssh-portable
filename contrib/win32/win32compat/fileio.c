@@ -144,9 +144,8 @@ cleanup:
 }
 
 struct pipe_listener_info {
-	wchar_t* name;
+	wchar_t pipe_name[PATH_MAX];
 	HANDLE owner;
-	HANDLE client;
 };
 
 int
@@ -155,21 +154,31 @@ fileio_bind(struct w32_io* pio, char* name)
 	wchar_t* name_w = NULL;
 	struct pipe_listener_info* info = NULL;
 	int ret = -1;
+	HANDLE event = NULL;
 
 	if ((name_w = utf8_to_utf16(name)) == NULL ||
-	    (info = malloc(sizeof(struct pipe_listener_info))) == NULL) {
+	    (info = malloc(sizeof(struct pipe_listener_info))) == NULL ||
+	    (event = CreateEvent(NULL, TRUE, FALSE, NULL)) == NULL) {
 		errno = ENOMEM;
 		goto cleanup;
 	}
 
 	memset(info, 0, sizeof(struct pipe_listener_info));
-	info->name = name_w;
+	_snwprintf(info->pipe_name, PATH_MAX, L"\\\\.\\pipe\\%ls", name_w);
 	pio->internal.context = info;
 	info = NULL;
+	pio->read_overlapped.hEvent = event;
+	event = NULL;
 	pio->internal.state = SOCK_BOUND;
 	ret = 0;
 
 cleanup:
+	if (name_w)
+		free(name_w);
+	if (info)
+		free(info);
+	if (event)
+		CloseHandle(event);
 	return ret;
 }
 
@@ -183,25 +192,25 @@ fileio_listen(struct w32_io* pio, int backlog)
 
 
 #define BUFSIZE 5 * 1024
-int 
+void 
 fileio_initiate_accept(struct w32_io* pio) 
 {
-	wchar_t pipe_name[PATH_MAX];
 	HANDLE h = INVALID_HANDLE_VALUE;
 	int ret = -1;
 	struct pipe_listener_info* info = (struct pipe_listener_info*)pio->internal.context;
 
-	if ((pio->handle != 0 && pio->handle != INVALID_HANDLE_VALUE) ||
-	    pio->internal.state != SOCK_LISTENING ||  info == NULL) {
-		debug("fileio_bind called in unexpected state, pio = %p", pio);
-		errno = EOTHER;
-		goto cleanup;
+	if (pio->handle || pio->read_details.error || pio->read_details.pending) {
+		/* shouldn't be called in state */
+		debug("fileio_initiate_accept called in unexpected state");
+		DebugBreak();
 	}
 
-	_snwprintf(pipe_name, PATH_MAX, L"\\\\.\\pipe\\%ls", info->name);
-
+	ResetEvent(pio->read_overlapped.hEvent);
+	memset(&pio->read_details, 0, sizeof(pio->read_details));
+	pio->read_details.pending = TRUE;
+	
 	h = CreateNamedPipeW(
-		pipe_name,		  // pipe name 
+		info->pipe_name,		  // pipe name 
 		PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,       // read/write access 
 		PIPE_TYPE_BYTE |       // message type pipe 
 		PIPE_READMODE_BYTE |   // message-read mode 
@@ -211,13 +220,22 @@ fileio_initiate_accept(struct w32_io* pio)
 		BUFSIZE,                  // input buffer size 
 		0,                        // client time-out 
 		NULL);  /*TODO - set this to creater owner only*/
-
 	if (h == INVALID_HANDLE_VALUE) {
 		verbose("cannot create listener pipe ERROR:%d", GetLastError());
-		errno = errno_from_Win32LastError();
+		pio->read_details.error = GetLastError();
 		goto cleanup;
 	}
 
+	if (ConnectNamedPipe(h, &pio->read_overlapped) != FALSE) {
+		verbose("ConnectNamedPipe returned TRUE unexpectedly ");
+		pio->read_details.error = GetLastError();
+	}
+
+	if (GetLastError() == ERROR_PIPE_CONNECTED) {
+		debug2("Client has already connected");
+		SetEvent(pio->read_overlapped.hEvent);
+	}
+	
 	pio->handle = h;
 	h = INVALID_HANDLE_VALUE;
 	ret = 0;
@@ -225,6 +243,57 @@ fileio_initiate_accept(struct w32_io* pio)
 cleanup:
 	if (h != INVALID_HANDLE_VALUE)
 		CloseHandle(h);
+	if (pio->read_details.error)
+		SetEvent(pio->read_overlapped.hEvent);
+}
+
+struct w32_io* 
+fileio_accept(struct w32_io* pio) 
+{
+	struct w32_io* ret = NULL;
+
+	/* start io if not already started */
+	if (pio->read_details.pending == FALSE)
+		socketio_acceptEx(pio);
+
+	if (w32_io_is_blocking(pio)) {
+		/* block until accept io is complete */
+		while (FALSE == fileio_is_io_available(pio, TRUE))
+			if (-1 == wait_for_any_event(&pio->read_overlapped.hEvent,
+				1, INFINITE))
+				return NULL;
+	}
+	else {
+		/* if i/o is not ready */
+		if (FALSE == fileio_is_io_available(pio, TRUE)) {
+			errno = EAGAIN;
+			debug2("accept is pending, io:%p", pio);
+			return NULL;
+		}
+	}
+
+	/* pipe was connected or there was an error */
+	if (pio->read_details.error) {
+		errno = errno_from_Win32Error(pio->read_details.error);
+		goto cleanup;
+	}
+	
+	ret = (struct w32_io*)malloc(sizeof(struct w32_io));
+	if (ret == NULL) {
+		errno = ENOMEM;
+		goto cleanup;
+	}
+
+	ret->handle = pio->handle;
+	pio->handle = NULL;
+
+cleanup:
+	if (pio->handle) {
+		CloseHandle(pio->handle);
+		pio->handle = NULL;
+	}
+	/* cleanup pio */
+	memset(&pio->read_details, 0, sizeof(pio->read_details));
 	return ret;
 }
 
@@ -795,6 +864,12 @@ fileio_on_select(struct w32_io* pio, BOOL rd)
 	if (!rd)
 		return;
 
+	if (pio->internal.state == SOCK_LISTENING) {
+		if (pio->read_details.pending  == FALSE)
+			fileio_initiate_accept(pio);
+		return;
+	}
+
 	if (!pio->read_details.pending && !fileio_is_io_available(pio, rd))
 		/* initiate read, record any error so read() will pick up */
 		if (FILETYPE(pio) == FILE_TYPE_CHAR) {
@@ -816,6 +891,15 @@ int
 fileio_close(struct w32_io* pio)
 {
 	debug2("fileclose - pio:%p", pio);
+
+	if (pio->internal.state == SOCK_BOUND || pio->internal.state == SOCK_LISTENING) {
+		if (pio->internal.context) {
+			struct pipe_listener_info* info = pio->internal.context;
+			if (info->owner)
+				CloseHandle(info->owner);
+			free(info);
+		}
+	}
 
 	/* handle can be null on AF_UNIX sockets that are not yet connected */
 	if (WINHANDLE(pio) == 0 || WINHANDLE(pio) == INVALID_HANDLE_VALUE) {
@@ -843,6 +927,20 @@ fileio_close(struct w32_io* pio)
 BOOL
 fileio_is_io_available(struct w32_io* pio, BOOL rd)
 {
+	if (pio->internal.state == SOCK_LISTENING) {
+		DWORD tmp;
+		if (pio->read_details.error)
+			return TRUE;
+		if (GetOverlappedResult(pio->handle, &pio->read_overlapped, &tmp, FALSE))
+			return TRUE;
+		if (GetLastError() != ERROR_IO_PENDING) {
+			pio->read_details.error = GetLastError();
+			return TRUE;
+		}
+		return FALSE;
+	}
+
+	 /* RW operations */
 	if (rd) {
 		if (pio->read_details.remaining || pio->read_details.error)
 			return TRUE;
