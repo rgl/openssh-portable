@@ -346,6 +346,12 @@ w32_shutdown(int fd, int how)
 {
 	debug2("shutdown - fd:%d how:%d", fd, how);
 	CHECK_FD(fd);
+	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
+		/* TODO - figure out a way to support shutdown semantics on named pipes*/
+		debug2("shutdown on AF_UNIX sockets not supported yet");
+		return 0;
+	}
+
 	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
 	return socketio_shutdown(fd_table.w32_ios[fd], how);
 }
