@@ -284,6 +284,7 @@ fileio_accept(struct w32_io* pio)
 		goto cleanup;
 	}
 
+	memset(ret, 0, sizeof(struct w32_io));
 	ret->handle = pio->handle;
 	pio->handle = NULL;
 
@@ -928,12 +929,12 @@ BOOL
 fileio_is_io_available(struct w32_io* pio, BOOL rd)
 {
 	if (pio->internal.state == SOCK_LISTENING) {
-		DWORD tmp;
+		ULONG tmp;
 		if (pio->read_details.error)
 			return TRUE;
-		if (GetOverlappedResult(pio->handle, &pio->read_overlapped, &tmp, FALSE))
+		if (GetNamedPipeClientProcessId(pio->handle, &tmp))
 			return TRUE;
-		if (GetLastError() != ERROR_IO_PENDING) {
+		if (GetLastError() != ERROR_NOT_FOUND) {
 			pio->read_details.error = GetLastError();
 			return TRUE;
 		}

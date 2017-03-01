@@ -171,21 +171,21 @@ static void
 auth_sock_cleanup_proc(struct passwd *pw)
 {
 	if (auth_sock_name != NULL) {
+#ifdef WINDOWS
+		/* nothing to do for Windows */
+#else
 		temporarily_use_uid(pw);
 		unlink(auth_sock_name);
 		rmdir(auth_sock_dir);
 		auth_sock_name = NULL;
 		restore_uid();
+#endif
 	}
 }
 
 static int
 auth_input_request_forwarding(struct passwd * pw)
 {
-#ifdef WINDOWS
-	packet_send_debug("Agent forwarding not supported yet in Windows");
-	return 0;
-#else  /* !WINDOWS */
 	Channel *nc;
 	int sock = -1;
 
@@ -197,6 +197,9 @@ auth_input_request_forwarding(struct passwd * pw)
 	/* Temporarily drop privileged uid for mkdir/bind. */
 	temporarily_use_uid(pw);
 
+#ifdef WINDOWS
+	xasprintf(&auth_sock_name, "forwarded-agent-%ld", (long)getpid());
+#else
 	/* Allocate a buffer for the socket name, and format the name. */
 	auth_sock_dir = xstrdup("/tmp/ssh-XXXXXXXXXX");
 
@@ -212,6 +215,7 @@ auth_input_request_forwarding(struct passwd * pw)
 
 	xasprintf(&auth_sock_name, "%s/agent.%ld",
 	    auth_sock_dir, (long) getpid());
+#endif
 
 	/* Start a Unix listener on auth_sock_name. */
 	sock = unix_listener(auth_sock_name, SSH_LISTEN_BACKLOG, 0);
@@ -242,7 +246,6 @@ auth_input_request_forwarding(struct passwd * pw)
 	auth_sock_name = NULL;
 	auth_sock_dir = NULL;
 	return 0;
-#endif  /* !WINDOWS */
 }
 
 static void
@@ -434,6 +437,9 @@ static void setup_session_vars(Session* s) {
 		UTF8_TO_UTF16_FATAL(tmp, original_command);
 		SetEnvironmentVariableW(L"SSH_ORIGINAL_COMMAND", tmp);
 	}
+
+	if (auth_sock_name)
+		SetEnvironmentVariableA(SSH_AUTHSOCKET_ENV_NAME, auth_sock_name);
 
 	if ((s->term) && (s->term[0]))
 		SetEnvironmentVariableA("TERM", s->term);
