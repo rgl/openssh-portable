@@ -2383,9 +2383,9 @@ static int
 session_env_req(Session *s)
 {
 	char *name, *val;
-	u_int name_chars, val_len, i;
+	u_int name_len, val_len, i;
 
-	name = packet_get_cstring(&name_chars);
+	name = packet_get_cstring(&name_len);
 	val = packet_get_cstring(&val_len);
 	packet_check_eom();
 
