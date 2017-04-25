@@ -7,7 +7,8 @@ Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -force -DisableNameChecking
 [System.IO.DirectoryInfo] $script:gitRoot = $null
 [bool] $script:Verbose = $false
 [string] $script:BuildLogFile = $null
-[string] $script:LibreSSLSDKPath = $null
+[string] $script:libreSSLSDKStr = "LibreSSLSDK"
+
 <#
     Called by Write-BuildMsg to write to the build log, if it exists. 
 #>
@@ -246,23 +247,22 @@ function Start-OpenSSHBootstrap
 
 function Copy-LibreSSLSDK
 {
+    [bool] $silent = -not $script:Verbose
+
     $script:gitRoot = "E:\balu\Microsoft\Powershell\Code"
     $url = "https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.5.3-windows.zip"
     $opensshPath = Join-Path $script:gitRoot "openssh-portable\contrib\win32\openssh"
     $libreSSLZipPath = Join-Path $opensshPath "libressl-2.5.3-windows.zip"
-    $libreSSLSDKStr = "LibreSSLSDK"
-    $script:LibreSSLSDKPath = Join-Path $opensshPath $libreSSLSDKStr
+    $LibreSSLSDKPath = Join-Path $opensshPath $script:libreSSLSDKStr
 
     #Delete files if exist
     Remove-Item -Path $libreSSLZipPath -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path $script:LibreSSLSDKPath -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $LibreSSLSDKPath -Recurse -Force -ErrorAction SilentlyContinue
 
     #Download the LibreSSLSDK
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $WebClient = New-Object System.Net.WebClient
-    "LibreSSL download starttime: " + $(Get-Date).ToString()
     $WebClient.DownloadFile($url, $libreSSLZipPath)
-    "LibreSSL download endtime: " + $(Get-Date).ToString()
     
     #Extract (unzip) the LibreSSLSDK
     Expand-Archive $libreSSLZipPath -DestinationPath $opensshPath -Force -ErrorAction SilentlyContinue -ErrorVariable e
@@ -272,13 +272,13 @@ function Copy-LibreSSLSDK
     }
     
     #Rename "libressl-2.5.3-windows" to "LibreSSLSDK"
-    Rename-Item -path ($libreSSLZipPath.Replace(".zip","")) -newName $libreSSLSDKStr -Force -ErrorAction SilentlyContinue -ErrorVariable e
+    Rename-Item -path ($libreSSLZipPath.Replace(".zip","")) -newName $script:libreSSLSDKStr -Force -ErrorAction SilentlyContinue -ErrorVariable e
     if($e -ne $null)
     {
         Write-BuildMsg -AsError -ErrorAction Stop -Message "Rename to LibreSSLSDK has failed"
     }
     
-    Write-BuildMsg -AsInfo -Message "Successfully copied the libreSSLSDK to $script:LibreSSLSDKPath"
+    Write-BuildMsg -AsInfo -Message "Successfully copied the libreSSLSDK to $LibreSSLSDKPath" -Silent:$silent
     
     #Delete .zip file
     Remove-Item -Path $libreSSLZipPath -Recurse -Force -ErrorAction SilentlyContinue
@@ -434,7 +434,7 @@ function Build-OpenSSH
         Write-BuildMsg -AsError -ErrorAction Stop -Message "Build failed for OpenSSH.`nExitCode: $error."
     }    
 
-    Write-BuildMsg -AsInfo -Message "SSH build passed." -Silent:$silent
+    Write-BuildMsg -AsInfo -Message "SSH build successful."
 }
 
 function Get-BuildLogFile
@@ -495,18 +495,9 @@ function Install-OpenSSH
         if ($env:PROCESSOR_ARCHITECTURE  -eq 'x86') {
             $NativeHostArch = 'x86'
         }
-    
-    #Copy LibreSSL binary
-    if( $folderName -ieq "Win32" )
-    {
-        Copy-Item -Path $(Join-Path $script:LibreSSLSDKPath "x86\libcrypto-41.dll") -Destination $OpenSSHDir -Force -ErrorAction Stop
-    }
-    else
-    {
-        Copy-Item -Path $(Join-Path $script:LibreSSLSDKPath "x64\libcrypto-41.dll") -Destination $OpenSSHDir -Force -ErrorAction Stop
-    }
     }
 
+    Remove-Item -Path $OpenSSHDir -Recurse -Force -ErrorAction SilentlyContinue
     Package-OpenSSH -NativeHostArch $NativeHostArch -Configuration $Configuration -DestinationPath $OpenSSHDir
 
     Push-Location $OpenSSHDir 
@@ -532,6 +523,18 @@ function Install-OpenSSH
     Set-Service ssh-agent -StartupType Automatic
     Start-Service sshd
 
+    #Copy LibreSSL binary
+    $opensshPath = Join-Path $script:gitRoot "openssh-portable\contrib\win32\openssh"
+    $LibreSSLSDKPath = Join-Path $opensshPath $script:libreSSLSDKStr
+    if( $NativeHostArch -ieq "x86" )
+    {
+        Copy-Item -Path $(Join-Path $LibreSSLSDKPath "x86\libcrypto-41.dll") -Destination $OpenSSHDir -Force -ErrorAction Stop
+    }
+    else
+    {
+        Copy-Item -Path $(Join-Path $LibreSSLSDKPath "x64\libcrypto-41.dll") -Destination $OpenSSHDir -Force -ErrorAction Stop
+    }
+
     Pop-Location
     Write-Log -Message "OpenSSH installed!"
 }
@@ -554,8 +557,7 @@ function UnInstall-OpenSSH
         Stop-Service ssh-agent -Force -ErrorAction SilentlyContinue
     }
     &( "$OpenSSHDir\uninstall-sshd.ps1")
-    &( "$OpenSSHDir\uninstall-sshlsa.ps1")
-        
+
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
     $newMachineEnvironmentPath = $machinePath
     if ($machinePath.ToLower().Contains($OpenSSHDir.ToLower()))
