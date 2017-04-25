@@ -8,6 +8,7 @@ Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -force -DisableNameChecking
 [bool] $script:Verbose = $false
 [string] $script:BuildLogFile = $null
 [string] $script:libreSSLSDKStr = "LibreSSLSDK"
+[string] $script:opensshPath = $null
 
 <#
     Called by Write-BuildMsg to write to the build log, if it exists. 
@@ -249,11 +250,10 @@ function Copy-LibreSSLSDK
 {
     [bool] $silent = -not $script:Verbose
 
-    $script:gitRoot = "E:\balu\Microsoft\Powershell\Code"
     $url = "https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.5.3-windows.zip"
-    $opensshPath = Join-Path $script:gitRoot "openssh-portable\contrib\win32\openssh"
-    $libreSSLZipPath = Join-Path $opensshPath "libressl-2.5.3-windows.zip"
-    $LibreSSLSDKPath = Join-Path $opensshPath $script:libreSSLSDKStr
+    $script:opensshPath = Join-Path $script:gitRoot "openssh-portable\contrib\win32\openssh"
+    $libreSSLZipPath = Join-Path $script:opensshPath "libressl-2.5.3-windows.zip"
+    $LibreSSLSDKPath = Join-Path $script:opensshPath $script:libreSSLSDKStr
 
     #Delete files if exist
     Remove-Item -Path $libreSSLZipPath -Recurse -Force -ErrorAction SilentlyContinue
@@ -265,7 +265,7 @@ function Copy-LibreSSLSDK
     $WebClient.DownloadFile($url, $libreSSLZipPath)
     
     #Extract (unzip) the LibreSSLSDK
-    Expand-Archive $libreSSLZipPath -DestinationPath $opensshPath -Force -ErrorAction SilentlyContinue -ErrorVariable e
+    Expand-Archive $libreSSLZipPath -DestinationPath $script:opensshPath -Force -ErrorAction SilentlyContinue -ErrorVariable e
     if($e -ne $null)
     {
         Write-BuildMsg -AsError -ErrorAction Stop -Message "LibreSSLSDK unzip failed"
@@ -497,13 +497,17 @@ function Install-OpenSSH
         }
     }
 
-    Remove-Item -Path $OpenSSHDir -Recurse -Force -ErrorAction SilentlyContinue
+    #We need to uninstall first
+    if(Test-Path -Path $OpenSSHDir)
+    {
+        UnInstall-OpenSSH
+    }
+    
     Package-OpenSSH -NativeHostArch $NativeHostArch -Configuration $Configuration -DestinationPath $OpenSSHDir
 
     Push-Location $OpenSSHDir 
     & ( "$OpenSSHDir\install-sshd.ps1") 
     .\ssh-keygen.exe -A
-
 
     #machine will be reboot after Install-openssh anyway
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
@@ -524,8 +528,7 @@ function Install-OpenSSH
     Start-Service sshd
 
     #Copy LibreSSL binary
-    $opensshPath = Join-Path $script:gitRoot "openssh-portable\contrib\win32\openssh"
-    $LibreSSLSDKPath = Join-Path $opensshPath $script:libreSSLSDKStr
+    $LibreSSLSDKPath = Join-Path $script:opensshPath $script:libreSSLSDKStr
     if( $NativeHostArch -ieq "x86" )
     {
         Copy-Item -Path $(Join-Path $LibreSSLSDKPath "x86\libcrypto-41.dll") -Destination $OpenSSHDir -Force -ErrorAction Stop
