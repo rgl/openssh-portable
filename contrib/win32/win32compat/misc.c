@@ -297,7 +297,8 @@ char*
 			goto cleanup;
 		}
 		/* prepare for Unicode input */
-		_setmode(_fileno(stream), O_U16TEXT); 
+		if (_setmode(_fileno(stream), O_U16TEXT) == -1) 
+			return NULL;
 		if (fgetws(str_w, n/4, stream) == NULL)
 			goto cleanup;
 		if ((str_tmp = utf16_to_utf8(str_w)) == NULL) {
@@ -404,6 +405,7 @@ w32_ioctl(int d, int request, ...)
 	}
 }
 
+/* p should be atlest 12 bytes long*/
 void
 strmode(mode_t mode, char *p)
 {
@@ -432,76 +434,12 @@ strmode(mode_t mode, char *p)
 	}
 
 	/* The below code is commented as the group, other is not applicable on the windows.
-	 * This will be properly fixed in next releases.
 	 * As of now we are keeping "*" for everything.
+	 * TODO - figure out if there is a better option
 	 */
 	const char *permissions = "********* ";
 	strncpy(p, permissions, strlen(permissions) + 1);
 	p = p + strlen(p);
-	/* //usr
-	if (mode & S_IRUSR)
-		*p++ = 'r';
-	else
-		*p++ = '-';
-	if (mode & S_IWUSR)
-		*p++ = 'w';
-	else
-		*p++ = '-';
-	switch (mode & (S_IXUSR)) {
-	case 0:
-		*p++ = '-';
-		break;
-	case S_IXUSR:
-		*p++ = 'x';
-		break;
-		//case S_ISUID:
-		//		*p++ = 'S';
-		//		break;
-		//case S_IXUSR | S_ISUID:
-		//		*p++ = 's';
-		//		break;
-	}
-	// group
-	if (mode & S_IRGRP)
-		*p++ = 'r';
-	else
-		*p++ = '-';
-	if (mode & S_IWGRP)
-		*p++ = 'w';
-	else
-		*p++ = '-';
-	switch (mode & (S_IXGRP)) {
-	case 0:
-		*p++ = '-';
-		break;
-	case S_IXGRP:
-		*p++ = 'x';
-		break;
-		//case S_ISGID:
-		//		*p++ = 'S';
-		//		break;
-		//case S_IXGRP | S_ISGID:
-		//		*p++ = 's';
-		//		break;
-	}
-	// other
-	if (mode & S_IROTH)
-		*p++ = 'r';
-	else
-		*p++ = '-';
-	if (mode & S_IWOTH)
-		*p++ = 'w';
-	else
-		*p++ = '-';
-	switch (mode & (S_IXOTH)) {
-	case 0:
-		*p++ = '-';
-		break;
-	case S_IXOTH:
-		*p++ = 'x';
-		break;
-	}
-	*p++ = ' ';		//  will be a '+' if ACL's implemented */
 	*p = '\0';
 }
 
@@ -610,7 +548,7 @@ w32_rename(const char *old_name, const char *new_name)
 	}
 
 	/*
-	 * To be consistent with linux rename(),
+	 * To be consistent with POSIX rename(),
 	 * 1) if the new_name is file, then delete it so that _wrename will succeed.
 	 * 2) if the new_name is directory and it is empty then delete it so that _wrename will succeed.
 	 */
@@ -688,9 +626,10 @@ w32_getcwd(char *buffer, int maxlen)
 	wchar_t wdirname[PATH_MAX];
 	char* putf8 = NULL;
 
-	_wgetcwd(&wdirname[0], PATH_MAX);
+	if (_wgetcwd(wdirname, PATH_MAX) == NULL)
+		return NULL;
 
-	if ((putf8 = utf16_to_utf8(&wdirname[0])) == NULL)
+	if ((putf8 = utf16_to_utf8(wdirname)) == NULL)
 		fatal("failed to convert input arguments");
 	strcpy(buffer, putf8);
 	free(putf8);
@@ -765,10 +704,12 @@ char *
 realpath(const char *path, char resolved[PATH_MAX])
 {
 	char tempPath[PATH_MAX];
+	size_t path_len = strlen(path);
 
-	if ((path[0] == '/') && path[1] && (path[2] == ':'))
+	if ((path[0] == '/') && path[1] && (path[2] == ':')) {
+		if (path_len > )
 		strncpy(resolved, path + 1, strlen(path)); /* skip the first '/' */
-	else
+	} else
 		strncpy(resolved, path, strlen(path) + 1);
 
 	if ((resolved[0]) && (resolved[1] == ':') && (resolved[2] == '\0')) { /* make "x:" as "x:\\" */

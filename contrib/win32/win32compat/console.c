@@ -72,15 +72,11 @@ char *consoleTitle = "Microsoft openSSH client";
 int 
 ConEnterRawMode(DWORD OutputHandle, BOOL fSmartInit)
 {
-	OSVERSIONINFO os;
 	DWORD dwAttributes = 0;
 	DWORD dwRet = 0;
 	BOOL bRet = FALSE;
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
 	static bool bFirstConInit = true;
-
-	os.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-	GetVersionEx(&os);
 
 	hOutputConsole = GetStdHandle(OutputHandle);
 	if (hOutputConsole == INVALID_HANDLE_VALUE) {
@@ -1077,6 +1073,7 @@ ConMoveVisibleWindow(int offset)
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 	SMALL_RECT visibleWindowRect;
 
+	memset(&visibleWindowRect, 0, sizeof(SMALL_RECT));
 	if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo)) {
 		/* Check if applying the offset results in console buffer overflow.
 		* if yes, then scrolldown the console buffer.
@@ -1087,6 +1084,10 @@ ConMoveVisibleWindow(int offset)
 
 			if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
 				memcpy(&visibleWindowRect, &consoleInfo.srWindow, sizeof(visibleWindowRect));
+			else {
+				error("GetConsoleScreenBufferInfo failed with %d", GetLastError());
+				return;
+			}
 		} else {
 			memcpy(&visibleWindowRect, &consoleInfo.srWindow, sizeof(visibleWindowRect));
 			visibleWindowRect.Top += offset;
@@ -1329,6 +1330,8 @@ ConSaveScreenHandle(SCREEN_HANDLE hScreen)
 
 	if (pScreenRec == NULL) {
 		pScreenRec = (PSCREEN_RECORD)malloc(sizeof(SCREEN_RECORD));
+		if (pScreenRec == NULL)
+			fatal("out of memory");
 		pScreenRec->pScreenBuf = NULL;
 	}
 
