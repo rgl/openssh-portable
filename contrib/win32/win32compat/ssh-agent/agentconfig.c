@@ -95,7 +95,7 @@ int GetCurrentModulePath(wchar_t *path, int pathSize)
 int load_config() {
 	wchar_t basePath[PATH_MAX] = { 0 };
 	wchar_t path[PATH_MAX] = { 0 };
-	wchar_t config_file = L"/sshd_config";
+	wchar_t* config_file = L"/sshd_config";
 
 	if (GetCurrentModulePath(basePath, PATH_MAX) == -1)
 		return -1;

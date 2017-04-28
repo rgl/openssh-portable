@@ -38,9 +38,15 @@
 #define MSGBUFSIZ 1024
 static int logfd = -1;
 
+/* 
+ * open a log file using the name of executable under logs folder
+ * Ex. if called from c:\windows\system32\openssh\sshd.exe
+ * logfile - c:\windows\system32\openssh\logs\sshd.log
+ */
 void
 openlog(char *ident, unsigned int option, int facility)
 {
+	wchar_t *logs_dir = L"\\logs\\";
 	if (logfd != -1 || ident == NULL)
 		return;
 
@@ -50,6 +56,9 @@ openlog(char *ident, unsigned int option, int facility)
 
 	path[PATH_MAX - 1] = '\0';
 
+	if (wcsnlen(path, MAX_PATH) > MAX_PATH - wcslen(logs_dir) )
+		return;
+
 	/* split path root and module */
 	{
 		wchar_t* tail = path + wcslen(path), *p;
@@ -58,7 +67,7 @@ openlog(char *ident, unsigned int option, int facility)
 
 		memcpy(log_file, path, (tail - path) * sizeof(wchar_t));
 		p = log_file + (tail - path);
-		memcpy(p, L"\\logs\\", 12);
+		memcpy(p, logs_dir, wcslen(logs_dir) * sizeof(wchar_t));
 		p += 6;
 		memcpy(p, tail + 1, (wcslen(tail + 1) - 3) * sizeof(wchar_t));
 		p += wcslen(tail + 1) - 3;
@@ -81,13 +90,16 @@ syslog(int priority, const char *format, const char *formatBuffer)
 {
 	char msgbufTimestamp[MSGBUFSIZ];
 	SYSTEMTIME st;
+	int r;
 
 	if (logfd == -1)
 		return;
 
 	GetLocalTime(&st);
-	snprintf(msgbufTimestamp, sizeof msgbufTimestamp, "%d %02d:%02d:%02d %03d %s\n",
+	r = snprintf(msgbufTimestamp, sizeof(msgbufTimestamp), "%d %02d:%02d:%02d %03d %s\n",
 		GetCurrentProcessId(), st.wHour, st.wMinute, st.wSecond,
 		st.wMilliseconds, formatBuffer);
-	_write(logfd, msgbufTimestamp, strlen(msgbufTimestamp));
+	msgbufTimestamp[sizeof(msgbufTimestamp) - 1] = '\0';
+	if (r > 0 && r < sizeof(msgbufTimestamp))
+		_write(logfd, msgbufTimestamp, strlen(msgbufTimestamp));
 }
