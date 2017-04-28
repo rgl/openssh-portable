@@ -646,8 +646,10 @@ fileio_stat(const char *path, struct _stat64 *buf)
 	wchar_t* wpath = NULL;
 	int r = -1;
 
-	if ((wpath = utf8_to_utf16(path)) == NULL)
-		fatal("failed to covert input arguments");
+	if ((wpath = utf8_to_utf16(path)) == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
 
 	r = _wstat64(wpath, buf);
 

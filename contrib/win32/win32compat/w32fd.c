@@ -893,7 +893,7 @@ spawn_child(char* cmd, char** argv, int in, int out, int err, DWORD flags)
 	BOOL b;
 	char *cmdline, *t, **t1;
 	DWORD cmdline_len = 0;
-	wchar_t * cmdline_utf16;
+	wchar_t * cmdline_utf16 = NULL;
 	int add_module_path = 0, ret = -1;
 
 	/* should module path be added */

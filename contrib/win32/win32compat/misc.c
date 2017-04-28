@@ -629,8 +629,11 @@ w32_getcwd(char *buffer, int maxlen)
 	if (_wgetcwd(wdirname, PATH_MAX) == NULL)
 		return NULL;
 
-	if ((putf8 = utf16_to_utf8(wdirname)) == NULL)
-		fatal("failed to convert input arguments");
+	if ((putf8 = utf16_to_utf8(wdirname)) == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+
 	strcpy(buffer, putf8);
 	free(putf8);
 
@@ -750,70 +753,6 @@ sanitized_path(const char *path)
 	}
 
 	return (char *)path;
-}
-
-
-BOOL
-ResolveLink(wchar_t * tLink, wchar_t *ret, DWORD * plen, DWORD Flags)
-{
-	HANDLE fileHandle;
-	BYTE reparseBuffer[MAX_REPARSE_SIZE];
-	PBYTE reparseData;
-	PREPARSE_GUID_DATA_BUFFER reparseInfo = (PREPARSE_GUID_DATA_BUFFER)reparseBuffer;
-	PREPARSE_DATA_BUFFER msReparseInfo = (PREPARSE_DATA_BUFFER)reparseBuffer;
-	DWORD   returnedLength;
-
-	if (Flags & FILE_ATTRIBUTE_DIRECTORY) {
-		fileHandle = CreateFileW(tLink, 0,
-			FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-			OPEN_EXISTING,
-			FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, 0);
-
-	} else {
-		/* Open the file */
-		fileHandle = CreateFileW(tLink, 0,
-			FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-			OPEN_EXISTING,
-			FILE_FLAG_OPEN_REPARSE_POINT, 0);
-	}
-
-	if (fileHandle == INVALID_HANDLE_VALUE)	{
-		swprintf_s(ret, *plen, L"%ls", tLink);
-		return TRUE;
-	}
-
-	if (GetFileAttributesW(tLink) & FILE_ATTRIBUTE_REPARSE_POINT) {
-		if (DeviceIoControl(fileHandle, FSCTL_GET_REPARSE_POINT,
-			NULL, 0, reparseInfo, sizeof(reparseBuffer),
-			&returnedLength, NULL)) {
-			if (IsReparseTagMicrosoft(reparseInfo->ReparseTag)) {
-				switch (reparseInfo->ReparseTag) {
-				case 0x80000000 | IO_REPARSE_TAG_SYMBOLIC_LINK:
-				case IO_REPARSE_TAG_MOUNT_POINT:
-					if (*plen >= msReparseInfo->MountPointReparseBuffer.SubstituteNameLength) {
-						reparseData = (PBYTE)&msReparseInfo->SymbolicLinkReparseBuffer.PathBuffer;
-						WCHAR temp[1024];
-						wcsncpy_s(temp, 1024,
-							(PWCHAR)(reparseData + msReparseInfo->MountPointReparseBuffer.SubstituteNameOffset),
-							(size_t)msReparseInfo->MountPointReparseBuffer.SubstituteNameLength);
-						temp[msReparseInfo->MountPointReparseBuffer.SubstituteNameLength] = 0;
-						swprintf_s(ret, *plen, L"%ls", &temp[4]);
-					} else {
-						swprintf_s(ret, *plen, L"%ls", tLink);
-						return FALSE;
-					}
-
-					break;
-				default:
-					break;
-				}
-			}
-		}
-	} else
-		swprintf_s(ret, *plen, L"%ls", tLink);
-
-	CloseHandle(fileHandle);
-	return TRUE;
 }
 
 int
