@@ -95,17 +95,21 @@ int GetCurrentModulePath(wchar_t *path, int pathSize)
 int load_config() {
 	wchar_t basePath[PATH_MAX] = { 0 };
 	wchar_t path[PATH_MAX] = { 0 };
-        
-        if (GetCurrentModulePath(basePath, PATH_MAX) == -1)
-                return -1;
+	wchar_t config_file = L"/sshd_config";
 
+	if (GetCurrentModulePath(basePath, PATH_MAX) == -1)
+		return -1;
+
+	if (wcslen(basePath) + wcslen(config_file) + 1 > PATH_MAX)
+		fatal("unexpected config file path length");
+	
 	wcsncpy(path, basePath, PATH_MAX);
-        wcsncat(path, L"/sshd_config", PATH_MAX);
+	wcsncat(path, L"/sshd_config", PATH_MAX - wcslen(basePath));
 	
-        if ((config_file_name = utf16_to_utf8(path)) == NULL)
-                return -1;
+	if ((config_file_name = utf16_to_utf8(path)) == NULL)
+		return -1;
 	
-        buffer_init(&cfg);
+	buffer_init(&cfg);
 	initialize_server_options(&options);
 	load_server_config(config_file_name, &cfg);
 	parse_server_config(&options, config_file_name, &cfg, NULL);

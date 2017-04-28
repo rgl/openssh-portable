@@ -631,10 +631,16 @@ w32_getcwd(char *buffer, int maxlen)
 
 	if ((putf8 = utf16_to_utf8(wdirname)) == NULL) {
 		errno = ENOMEM;
-		return -1;
+		return NULL;
 	}
 
-	strcpy(buffer, putf8);
+	if (strlen(putf8) >= maxlen) {
+		errno = ERANGE;
+		free(putf8);
+		return NULL;
+	}
+
+	strcpy_s(buffer, maxlen, putf8);
 	free(putf8);
 
 	return buffer;
