@@ -706,11 +706,15 @@ realpath(const char *path, char resolved[PATH_MAX])
 	char tempPath[PATH_MAX];
 	size_t path_len = strlen(path);
 
-	if ((path[0] == '/') && path[1] && (path[2] == ':')) {
-		if (path_len > )
-		strncpy(resolved, path + 1, strlen(path)); /* skip the first '/' */
-	} else
-		strncpy(resolved, path, strlen(path) + 1);
+	if (path_len > PATH_MAX - 1) {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	if ((path[0] == '/') && path[1] && (path[2] == ':')) 
+		memcpy(resolved, path + 1, path_len); /* skip the first '/' */
+	else
+		memcpy(resolved, path, path_len + 1);
 
 	if ((resolved[0]) && (resolved[1] == ':') && (resolved[2] == '\0')) { /* make "x:" as "x:\\" */
 		resolved[2] = '\\';
