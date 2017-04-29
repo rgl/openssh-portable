@@ -364,6 +364,12 @@ int process_authagent_request(struct sshbuf* request, struct sshbuf* response, s
 		return -1;
 	}
 
+	/* allow only admins and NT Service\sshd to send these requests */
+	if (con->client_type != SSHD_SERVICE && con->client_type != ADMIN_USER) {
+		error("cannot authenticate: client process is not admin or sshd");
+		return -1;
+	}
+		
 	if (memcmp(opn, PUBKEY_AUTH_REQUEST, opn_len) == 0)
 		return process_pubkeyauth_request(request, response, con);
 	else if (memcmp(opn, PASSWD_AUTH_REQUEST, opn_len) == 0)
