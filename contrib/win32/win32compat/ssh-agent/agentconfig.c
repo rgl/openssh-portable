@@ -95,17 +95,21 @@ int GetCurrentModulePath(wchar_t *path, int pathSize)
 int load_config() {
 	wchar_t basePath[PATH_MAX] = { 0 };
 	wchar_t path[PATH_MAX] = { 0 };
-        
-        if (GetCurrentModulePath(basePath, PATH_MAX) == -1)
-                return -1;
+	wchar_t* config_file = L"/sshd_config";
 
+	if (GetCurrentModulePath(basePath, PATH_MAX) == -1)
+		return -1;
+
+	if (wcslen(basePath) + wcslen(config_file) + 1 > PATH_MAX)
+		fatal("unexpected config file path length");
+	
 	wcsncpy(path, basePath, PATH_MAX);
-        wcsncat(path, L"/sshd_config", PATH_MAX);
+	wcsncat(path, L"/sshd_config", PATH_MAX - wcslen(basePath));
 	
-        if ((config_file_name = utf16_to_utf8(path)) == NULL)
-                return -1;
+	if ((config_file_name = utf16_to_utf8(path)) == NULL)
+		return -1;
 	
-        buffer_init(&cfg);
+	buffer_init(&cfg);
 	initialize_server_options(&options);
 	load_server_config(config_file_name, &cfg);
 	parse_server_config(&options, config_file_name, &cfg, NULL);
@@ -118,20 +122,13 @@ int config_log_level() {
 	return options.log_level;
 }
 
-int pubkey_allowed(struct sshkey* pubkey, wchar_t* wuser, wchar_t* wuser_home) {
-	struct passwd pw;
-        int ret;
+int pubkey_allowed(struct sshkey* pubkey, HANDLE user_token) {
+	struct passwd *pw;
+	int ret;
 	char *user = NULL, *user_home = NULL;
-	memset(&pw, 0, sizeof(pw));
-
-        if ((user_home = utf16_to_utf8(wuser_home)) == NULL ||
-            (user = utf16_to_utf8(wuser)) == NULL)
-                return 0;
 	
-        pw.pw_dir = user_home;
-	pw.pw_name = user;
-	ret = user_key_allowed(&pw, pubkey, 1);
-        free(user);
-        free(user_home);
-        return ret;
+	if ((pw = w32_getpwtoken(user_token)) == NULL)
+		return 0;
+
+	return user_key_allowed(pw, pubkey, 1);        
 }

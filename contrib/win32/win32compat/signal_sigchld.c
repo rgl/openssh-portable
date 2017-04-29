@@ -187,9 +187,10 @@ waitpid(int pid, int *status, int options)
 			return -1;
 		}
 
+		process = children.handles[index];
+
 		/* wait if process is still alive */
 		if (index < children.num_children - children.num_zombies) {
-			process = children.handles[index];
 			ret = WaitForSingleObject(process, INFINITE);
 			if (ret != WAIT_OBJECT_0)
 				DebugBreak();//fatal

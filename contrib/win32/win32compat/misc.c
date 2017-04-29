@@ -278,39 +278,62 @@ w32_fopen_utf8(const char *path, const char *mode)
 	return f;
 }
 
-/* fgets to support Unicode input */
+/*
+* fgets to support Unicode input 
+* each UTF-16 char may bloat up to 4 utf-8 chars. We cannot determine if the length of 
+* input unicode string until it is readed and converted to utf8 string.
+* There is a risk to miss on unicode char when last unicode char read from console
+* does not fit the remain space in str. use cauciously. 
+*/
 char*
  w32_fgets(char *str, int n, FILE *stream) {
 	HANDLE h = (HANDLE)_get_osfhandle(_fileno(stream));
 	wchar_t* str_w = NULL;
-	char *ret = NULL, *str_tmp = NULL;
+	char *ret = NULL, *str_tmp = NULL, *cp = NULL;
+	int actual_read = 0;
 
 	if (h != NULL && h != INVALID_HANDLE_VALUE
 	    && GetFileType(h) == FILE_TYPE_CHAR) {
-		/* 
-		 * read only n/4 wide chars from console 
-		 * each UTF-16 char may bloat upto 4 utf-8 chars when converted to utf-8 
-		 * so we can fit in str[n] provided as input
-		 */
-		if ((str_w = malloc((n/4) * sizeof(wchar_t))) == NULL) {
+
+		/* Allocate memory for one UTF-16 char (up to 4 bytes) and a terminate char (\0) */
+		if ((str_w = malloc(3 * sizeof(wchar_t))) == NULL) {
 			errno = ENOMEM;
 			goto cleanup;
 		}
 		/* prepare for Unicode input */
-		if (_setmode(_fileno(stream), O_U16TEXT) == -1) 
-			return NULL;
-		if (fgetws(str_w, n/4, stream) == NULL)
-			goto cleanup;
-		if ((str_tmp = utf16_to_utf8(str_w)) == NULL) {
-			errno = ENOMEM;
-			goto cleanup;
-		}
-		if (strlen(str_tmp) > n - 1) {
+		_setmode(_fileno(stream), O_U16TEXT);
+		cp = str;
+		/*
+		* each UTF-16 char may bloat up to 4 utf-8 chars
+		* read one wide chars at time from console and convert it to utf8
+		* stop reading until reach '\n' or the converted utf8 string length is n-1
+		*/
+		do {
+			if (str_tmp)
+				free(str_tmp);			
+			if (fgetws(str_w, 2, stream) == NULL)
+				goto cleanup;
+			if ((str_tmp = utf16_to_utf8(str_w)) == NULL) {
+				debug3("utf16_to_utf8 failed!");
+				errno = ENOMEM;
+				goto cleanup;
+			}
+			
+			if((actual_read + strlen(str_tmp)) >= n)
+				break;
+			memcpy(cp, str_tmp, strlen(str_tmp));
+			actual_read += strlen(str_tmp);
+			cp += strlen(str_tmp);
+			
+		} while ((actual_read < n - 1) && *str_tmp != '\n');
+		*cp = '\0';
+
+		if (actual_read > n - 1) {
 			/* shouldn't happen. but handling in case */
+			debug3("actual_read %d exceeds the limit:%d", actual_read, n-1);
 			errno = EINVAL;
 			goto cleanup;
-		}
-		memcpy(str, str_tmp, strlen(str_tmp) + 1);
+		}		
 		ret = str;
 	}
 	else
@@ -629,9 +652,18 @@ w32_getcwd(char *buffer, int maxlen)
 	if (_wgetcwd(wdirname, PATH_MAX) == NULL)
 		return NULL;
 
-	if ((putf8 = utf16_to_utf8(wdirname)) == NULL)
-		fatal("failed to convert input arguments");
-	strcpy(buffer, putf8);
+	if ((putf8 = utf16_to_utf8(wdirname)) == NULL) {
+		errno = ENOMEM;
+		return NULL;
+	}
+
+	if (strlen(putf8) >= maxlen) {
+		errno = ERANGE;
+		free(putf8);
+		return NULL;
+	}
+
+	strcpy_s(buffer, maxlen, putf8);
 	free(putf8);
 
 	return buffer;
@@ -706,10 +738,15 @@ realpath(const char *path, char resolved[PATH_MAX])
 	char tempPath[PATH_MAX];
 	size_t path_len = strlen(path);
 
-	if ((path[0] == '/') && path[1] && (path[2] == ':')) {
-		strncpy(resolved, path + 1, strlen(path)); /* skip the first '/' */
-	} else
-		strncpy(resolved, path, strlen(path) + 1);
+	if (path_len > PATH_MAX - 1) {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	if ((path[0] == '/') && path[1] && (path[2] == ':')) 
+		memcpy(resolved, path + 1, path_len); /* skip the first '/' */
+	else
+		memcpy(resolved, path, path_len + 1);
 
 	if ((resolved[0]) && (resolved[1] == ':') && (resolved[2] == '\0')) { /* make "x:" as "x:\\" */
 		resolved[2] = '\\';
@@ -745,70 +782,6 @@ sanitized_path(const char *path)
 	}
 
 	return (char *)path;
-}
-
-
-BOOL
-ResolveLink(wchar_t * tLink, wchar_t *ret, DWORD * plen, DWORD Flags)
-{
-	HANDLE fileHandle;
-	BYTE reparseBuffer[MAX_REPARSE_SIZE];
-	PBYTE reparseData;
-	PREPARSE_GUID_DATA_BUFFER reparseInfo = (PREPARSE_GUID_DATA_BUFFER)reparseBuffer;
-	PREPARSE_DATA_BUFFER msReparseInfo = (PREPARSE_DATA_BUFFER)reparseBuffer;
-	DWORD   returnedLength;
-
-	if (Flags & FILE_ATTRIBUTE_DIRECTORY) {
-		fileHandle = CreateFileW(tLink, 0,
-			FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-			OPEN_EXISTING,
-			FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, 0);
-
-	} else {
-		/* Open the file */
-		fileHandle = CreateFileW(tLink, 0,
-			FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-			OPEN_EXISTING,
-			FILE_FLAG_OPEN_REPARSE_POINT, 0);
-	}
-
-	if (fileHandle == INVALID_HANDLE_VALUE)	{
-		swprintf_s(ret, *plen, L"%ls", tLink);
-		return TRUE;
-	}
-
-	if (GetFileAttributesW(tLink) & FILE_ATTRIBUTE_REPARSE_POINT) {
-		if (DeviceIoControl(fileHandle, FSCTL_GET_REPARSE_POINT,
-			NULL, 0, reparseInfo, sizeof(reparseBuffer),
-			&returnedLength, NULL)) {
-			if (IsReparseTagMicrosoft(reparseInfo->ReparseTag)) {
-				switch (reparseInfo->ReparseTag) {
-				case 0x80000000 | IO_REPARSE_TAG_SYMBOLIC_LINK:
-				case IO_REPARSE_TAG_MOUNT_POINT:
-					if (*plen >= msReparseInfo->MountPointReparseBuffer.SubstituteNameLength) {
-						reparseData = (PBYTE)&msReparseInfo->SymbolicLinkReparseBuffer.PathBuffer;
-						WCHAR temp[1024];
-						wcsncpy_s(temp, 1024,
-							(PWCHAR)(reparseData + msReparseInfo->MountPointReparseBuffer.SubstituteNameOffset),
-							(size_t)msReparseInfo->MountPointReparseBuffer.SubstituteNameLength);
-						temp[msReparseInfo->MountPointReparseBuffer.SubstituteNameLength] = 0;
-						swprintf_s(ret, *plen, L"%ls", &temp[4]);
-					} else {
-						swprintf_s(ret, *plen, L"%ls", tLink);
-						return FALSE;
-					}
-
-					break;
-				default:
-					break;
-				}
-			}
-		}
-	} else
-		swprintf_s(ret, *plen, L"%ls", tLink);
-
-	CloseHandle(fileHandle);
-	return TRUE;
 }
 
 int

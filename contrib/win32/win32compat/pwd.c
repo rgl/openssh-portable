@@ -155,9 +155,13 @@ get_passwd(const char *user_utf8, LPWSTR user_sid)
 
 	/* if one of below fails, set profile path to Windows directory */
 	if (swprintf(reg_path, PATH_MAX, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\%ls", user_sid) == PATH_MAX ||
-		RegOpenKeyExW(HKEY_LOCAL_MACHINE, reg_path, 0, STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &reg_key) != 0 ||
-		RegQueryValueExW(reg_key, L"ProfileImagePath", 0, NULL, (LPBYTE)profile_home, &tmp_len) != 0)
-		GetWindowsDirectoryW(profile_home, PATH_MAX);
+	    RegOpenKeyExW(HKEY_LOCAL_MACHINE, reg_path, 0, STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &reg_key) != 0 ||
+	    RegQueryValueExW(reg_key, L"ProfileImagePath", 0, NULL, (LPBYTE)profile_home, &tmp_len) != 0) 
+		if (GetWindowsDirectoryW(profile_home, PATH_MAX) == 0) {
+			debug3("GetWindowsDirectoryW failed with %d", GetLastError());
+			errno = EOTHER;
+			goto done;
+		}
 
 	if ((uname_utf8 = utf16_to_utf8(uname_utf16)) == NULL ||
 	    (udom_utf16 && (udom_utf8 = utf16_to_utf8(udom_utf16)) == NULL) ||
@@ -221,13 +225,12 @@ w32_getpwnam(const char *user_utf8)
 }
 
 struct passwd*
-w32_getpwuid(uid_t uid)
+w32_getpwtoken(HANDLE t)
 {
 	wchar_t* wuser = NULL;
 	char* user_utf8 = NULL;
 	ULONG needed = 0;
 	struct passwd *ret = NULL;
-	HANDLE token = 0;
 	DWORD info_len = 0;
 	TOKEN_USER* info = NULL;
 	LPWSTR user_sid = NULL;
@@ -238,10 +241,9 @@ w32_getpwuid(uid_t uid)
 	    (wuser = malloc(needed * sizeof(wchar_t))) == NULL ||
 	    GetUserNameExW(NameSamCompatible, wuser, &needed) == 0 ||
 	    (user_utf8 = utf16_to_utf8(wuser)) == NULL ||
-	    OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token) == FALSE ||
-	    GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE ||
+	    GetTokenInformation(t, TokenUser, NULL, 0, &info_len) == TRUE ||
 	    (info = (TOKEN_USER*)malloc(info_len)) == NULL ||
-	    GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE ||
+	    GetTokenInformation(t, TokenUser, info, info_len, &info_len) == FALSE ||
 	    ConvertSidToStringSidW(info->User.Sid, &user_sid) == FALSE) {
 		errno = ENOMEM;
 		goto done;
@@ -253,8 +255,6 @@ done:
 		free(wuser);
 	if (user_utf8)
 		free(user_utf8);
-	if (token)
-		CloseHandle(token);
 	if (info)
 		free(info);
 	if (user_sid)
@@ -262,7 +262,21 @@ done:
 	return ret;
 }
 
+struct passwd*
+w32_getpwuid(uid_t uid)
+{
+	HANDLE token;
+	struct passwd* ret;
+	if ((OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) == FALSE) {
+		debug("unable to get process token");
+		errno = EOTHER;
+		return NULL;
+	}
 
+	ret = w32_getpwtoken(token);
+	CloseHandle(token);
+	return ret;
+}
 
 char *
 group_from_gid(gid_t gid, int nogroup)

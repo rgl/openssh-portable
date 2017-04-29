@@ -86,17 +86,17 @@ typedef struct consoleEvent {
 } consoleEvent;
 
 struct key_translation {
-	char incoming[5];
+	char incoming[6];
 	int vk;
-	char outgoing[1];
+	char outgoing;
 } key_translation;
 
 struct key_translation keys[] = {
-    { "\x1b",       VK_ESCAPE,  "\x1b" },
-    { "\r",         VK_RETURN,  "\r" },
-    { "\b",         VK_BACK,    "\b" },
-    { "\x7f",       VK_BACK,    "\b" },
-    { "\t",         VK_TAB,     "\t" },
+    { "\x1b",       VK_ESCAPE,  '\x1b' },
+    { "\r",         VK_RETURN,  '\r' },
+    { "\b",         VK_BACK,    '\b' },
+    { "\x7f",       VK_BACK,    '\b' },
+    { "\t",         VK_TAB,     '\t' },
     { "\x1b[A",     VK_UP,       0 },
     { "\x1b[B",     VK_DOWN,     0 },
     { "\x1b[C",     VK_RIGHT,    0 },
@@ -208,8 +208,7 @@ SendKeyStroke(HANDLE hInput, int keyStroke, char character)
 	ir.Event.KeyEvent.wVirtualScanCode = 0;
 	ir.Event.KeyEvent.dwControlKeyState = 0;
 	ir.Event.KeyEvent.uChar.UnicodeChar = 0;
-	if (character != 0)
-		ir.Event.KeyEvent.uChar.AsciiChar = character;
+	ir.Event.KeyEvent.uChar.AsciiChar = character;
 
 	WriteConsoleInputA(hInput, &ir, 1, &wr);
 
@@ -220,21 +219,20 @@ SendKeyStroke(HANDLE hInput, int keyStroke, char character)
 void 
 ProcessIncomingKeys(char * ansikey)
 {
-	int nKey = 0;
-	int index = ARRAYSIZE(keys);
+	int keylen = (int) strlen(ansikey);
 
-	while (nKey < index) {
+	if (!keylen)
+		return;
+
+	for (int nKey=0; nKey < ARRAYSIZE(keys); nKey++) {
 		if (strcmp(ansikey, keys[nKey].incoming) == 0) {
-			SendKeyStroke(child_in, keys[nKey].vk, keys[nKey].outgoing[0]);
-			break;
+			SendKeyStroke(child_in, keys[nKey].vk, keys[nKey].outgoing);
+			return;
 		}
-		else
-			nKey++;
 	}
 
-	if (nKey == index)
-		for(int i=0; i < strlen(ansikey); i++)
-			SendKeyStroke(child_in, 0, ansikey[i]);
+	for (int i=0; i < keylen; i++)
+		SendKeyStroke(child_in, 0, ansikey[i]);
 }
 
 /*
@@ -838,6 +836,19 @@ QueueEvent(DWORD event, HWND hwnd, LONG idObject, LONG idChild)
 	LeaveCriticalSection(&criticalSection);
 }
 
+void FreeQueueEvent()
+{
+	EnterCriticalSection(&criticalSection);
+	while (head) {
+		consoleEvent* current = head;
+		head = current->next;
+		free(current);
+	}
+	head = NULL;
+	tail = NULL;
+	LeaveCriticalSection(&criticalSection);
+}
+
 DWORD WINAPI 
 ProcessPipes(LPVOID p)
 {
@@ -847,31 +858,23 @@ ProcessPipes(LPVOID p)
 
 	/* process data from pipe_in and route appropriately */
 	while (1) {	
-		ZeroMemory(buf, 128);
-		int rd = 0, wr = 0, i = -1;
+		ZeroMemory(buf, sizeof(buf));
+		int rd = 0;
 
 		GOTO_CLEANUP_ON_FALSE(ReadFile(pipe_in, buf, sizeof(buf) - 1, &rd, NULL)); /* read bufsize-1 */
 		bStartup = FALSE;
-		while (++i < rd) {
-			INPUT_RECORD ir;
+		for (int i=0; i < rd; i++) {
+			if (buf[i] == 0)
+				break;
+
 			if (buf[i] == 3) { /*Ctrl+C - Raise Ctrl+C*/
 				GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
 				continue;
 			}
 
-			if (bAnsi) {
-				ir.EventType = KEY_EVENT;
-				ir.Event.KeyEvent.bKeyDown = TRUE;
-				ir.Event.KeyEvent.wRepeatCount = 1;
-				ir.Event.KeyEvent.wVirtualKeyCode = 0;
-				ir.Event.KeyEvent.wVirtualScanCode = 0;
-				ir.Event.KeyEvent.uChar.AsciiChar = buf[i];
-				ir.Event.KeyEvent.dwControlKeyState = 0;
-				WriteConsoleInputA(child_in, &ir, 1, &wr);
-
-				ir.Event.KeyEvent.bKeyDown = FALSE;
-				WriteConsoleInputA(child_in, &ir, 1, &wr);
-			} else {
+			if (bAnsi)
+				SendKeyStroke(child_in, 0, buf[i]);
+			else {
 				ProcessIncomingKeys(buf);
 				break;
 			}
@@ -960,6 +963,11 @@ start_with_pty(wchar_t *command)
 	HANDLE hEventHook = NULL;
 	HMODULE hm_kernel32 = NULL, hm_user32 = NULL;
 
+	if(cmd == NULL) {
+		printf("ssh-shellhost - out of memory");
+		return -1;
+	}
+		
 	if ((hm_kernel32 = LoadLibraryW(L"kernel32.dll")) == NULL ||
 	    (hm_user32 = LoadLibraryW(L"user32.dll")) == NULL ||
 	    (__SetCurrentConsoleFontEx = (__t_SetCurrentConsoleFontEx)GetProcAddress(hm_kernel32, "SetCurrentConsoleFontEx")) == NULL ||
@@ -1051,22 +1059,29 @@ start_with_pty(wchar_t *command)
 	ProcessMessages(NULL);
 cleanup:
 	dwStatus = GetLastError();
-	DeleteCriticalSection(&criticalSection);
 	if (child != INVALID_HANDLE_VALUE)
 		TerminateProcess(child, 0);
-	if (monitor_thread != NULL)
+	if (monitor_thread != NULL) {
 		WaitForSingleObject(monitor_thread, INFINITE);
-	if (ux_thread != NULL)
+		CloseHandle(monitor_thread);
+	}
+	if (ux_thread != NULL) {
 		TerminateThread(ux_thread, S_OK);
+		CloseHandle(ux_thread);
+	}
+	if (io_thread != NULL) {
+		TerminateThread(io_thread, 0);
+		CloseHandle(io_thread);
+	}
 	if (hEventHook)
 		__UnhookWinEvent(hEventHook);
-	if(pi.hProcess)
-		CloseHandle(pi.hProcess);
-	if (pi.hThread)
-		CloseHandle(pi.hThread);
-
-
 	FreeConsole();
+	if (child != INVALID_HANDLE_VALUE) {
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+	}
+	FreeQueueEvent();
+	DeleteCriticalSection(&criticalSection);
 
 	return child_exit_code;
 }

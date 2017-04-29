@@ -123,6 +123,7 @@ process_add_identity(struct sshbuf* request, struct sshbuf* response, struct age
 	SECURITY_ATTRIBUTES sa;
 
 	/* parse input request */
+	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
 	blob = sshbuf_ptr(request);
 	if (sshkey_private_deserialize(request, &key) != 0 ||
 	   (blob_len = (sshbuf_ptr(request) - blob) & 0xffffffff) == 0 ||
