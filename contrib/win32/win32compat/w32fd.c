@@ -418,7 +418,7 @@ w32_read(int fd, void *dst, size_t max)
 }
 
 int
-w32_write(int fd, const void *buf, unsigned int max)
+w32_write(int fd, const void *buf, size_t max)
 {
 	CHECK_FD(fd);
 

@@ -427,11 +427,12 @@ fileio_ReadFileEx(struct w32_io* pio, unsigned int bytes_requested)
 
 /* read() implementation */
 int
-fileio_read(struct w32_io* pio, void *dst, unsigned int max)
+fileio_read(struct w32_io* pio, void *dst, size_t max)
 {
 	int bytes_copied;
 
 	debug5("read - io:%p remaining:%d", pio, pio->read_details.remaining);
+
 	/* if read is pending */
 	if (pio->read_details.pending) {
 		if (w32_io_is_blocking(pio)) {
@@ -534,7 +535,7 @@ WriteCompletionRoutine(_In_ DWORD dwErrorCode,
 
 /* write() implementation */
 int
-fileio_write(struct w32_io* pio, const void *buf, unsigned int max)
+fileio_write(struct w32_io* pio, const void *buf, size_t max)
 {
 	int bytes_copied;
 	DWORD pipe_flags = 0, pipe_instances = 0;
