@@ -707,7 +707,6 @@ realpath(const char *path, char resolved[PATH_MAX])
 	size_t path_len = strlen(path);
 
 	if ((path[0] == '/') && path[1] && (path[2] == ':')) {
-		if (path_len > )
 		strncpy(resolved, path + 1, strlen(path)); /* skip the first '/' */
 	} else
 		strncpy(resolved, path, strlen(path) + 1);
