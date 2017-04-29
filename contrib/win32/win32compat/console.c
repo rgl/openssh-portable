@@ -66,7 +66,7 @@ typedef struct _SCREEN_RECORD {
 
 PSCREEN_RECORD pSavedScreenRec = NULL;
 int in_raw_mode = 0;
-char *consoleTitle = "Microsoft openSSH client";
+char *consoleTitle = "OpenSSH client";
 
 /* Used to enter the raw mode */
 int 
