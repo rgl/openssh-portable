@@ -31,6 +31,8 @@
 #include "agent.h"
 #include "agent-request.h"
 
+#pragma warning(push, 3)
+
 int process_request(struct agent_connection*);
 
 #define ABORT_CONNECTION_RETURN(c) do {	\
@@ -122,7 +124,6 @@ get_con_client_type(struct agent_connection* con)
 	char ns_sid[SECURITY_MAX_SID_SIZE];
 	char ls_sid[SECURITY_MAX_SID_SIZE];
 	DWORD reg_dom_len = 0, info_len = 0, sid_size;
-	SID_NAME_USE nuse;
 	HANDLE token;
 	TOKEN_USER* info = NULL;
 	HANDLE pipe = con->pipe_handle;
@@ -214,9 +215,9 @@ done:
 
 	ZeroMemory(&con->io_buf, sizeof(con->io_buf));
 	if (r == 0) {
-		POKE_U32(con->io_buf.buf, sshbuf_len(response));
+		POKE_U32(con->io_buf.buf, (u_int32_t)sshbuf_len(response));
 		memcpy(con->io_buf.buf + 4, sshbuf_ptr(response), sshbuf_len(response));
-		con->io_buf.num_bytes = sshbuf_len(response) + 4;
+		con->io_buf.num_bytes = (DWORD)sshbuf_len(response) + 4;
 	}
 	
 	if (response)
@@ -224,3 +225,5 @@ done:
 
 	return r;
 }
+
+#pragma warning(pop)

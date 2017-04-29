@@ -48,13 +48,16 @@
 
 #include <utf.h>
 
+#pragma warning(push, 3)
+
 Buffer cfg;
 ServerOptions options;
 struct passwd *privsep_pw = NULL;
 static char *config_file_name = _PATH_SERVER_CONFIG_FILE;
 int auth_sock = -1;
 
-int	 auth2_methods_valid(const char * c, int i) {
+int	 
+auth2_methods_valid(const char * c, int i) {
 	return 1;
 }
 
@@ -73,8 +76,8 @@ int	 kexgex_server(struct ssh * sh) {
 	return -1;
 }
 
-static
-int GetCurrentModulePath(wchar_t *path, int pathSize)
+static int 
+GetCurrentModulePath(wchar_t *path, int pathSize)
 {
 	if (GetModuleFileNameW(NULL, path, pathSize)) {
 		int i;
@@ -92,7 +95,8 @@ int GetCurrentModulePath(wchar_t *path, int pathSize)
 	return -1;
 }
 
-int load_config() {
+int 
+load_config() {
 	wchar_t basePath[PATH_MAX] = { 0 };
 	wchar_t path[PATH_MAX] = { 0 };
 	wchar_t* config_file = L"/sshd_config";
@@ -103,8 +107,8 @@ int load_config() {
 	if (wcslen(basePath) + wcslen(config_file) + 1 > PATH_MAX)
 		fatal("unexpected config file path length");
 	
-	wcsncpy(path, basePath, PATH_MAX);
-	wcsncat(path, L"/sshd_config", PATH_MAX - wcslen(basePath));
+	wcsncpy_s(path, PATH_MAX, basePath, PATH_MAX);
+	wcsncat_s(path, PATH_MAX, L"/sshd_config", PATH_MAX - wcslen(basePath));
 	
 	if ((config_file_name = utf16_to_utf8(path)) == NULL)
 		return -1;
@@ -118,13 +122,14 @@ int load_config() {
 	return 0;
 }
 
-int config_log_level() {
+int 
+config_log_level() {
 	return options.log_level;
 }
 
-int pubkey_allowed(struct sshkey* pubkey, HANDLE user_token) {
+int 
+pubkey_allowed(struct sshkey* pubkey, HANDLE user_token) {
 	struct passwd *pw;
-	int ret;
 	char *user = NULL, *user_home = NULL;
 	
 	if ((pw = w32_getpwtoken(user_token)) == NULL)
@@ -132,3 +137,5 @@ int pubkey_allowed(struct sshkey* pubkey, HANDLE user_token) {
 
 	return user_key_allowed(pw, pubkey, 1);        
 }
+
+#pragma warning(pop)

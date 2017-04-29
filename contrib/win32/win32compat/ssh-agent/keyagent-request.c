@@ -33,6 +33,8 @@
 #include "agent-request.h"
 #include <sddl.h>
 
+#pragma warning(push, 3)
+
 #define MAX_KEY_LENGTH 255
 #define MAX_VALUE_NAME 16383
 
@@ -143,9 +145,9 @@ process_add_identity(struct sshbuf* request, struct sshbuf* response, struct age
 	    RegCreateKeyExW(user_root, SSH_KEYS_ROOT, 0, 0, 0, KEY_WRITE | KEY_WOW64_64KEY, &sa, &reg, NULL) != 0 ||
 	    RegCreateKeyExA(reg, thumbprint, 0, 0, 0, KEY_WRITE | KEY_WOW64_64KEY, &sa, &sub, NULL) != 0 ||
 	    RegSetValueExW(sub, NULL, 0, REG_BINARY, eblob, eblob_len) != 0 ||
-	    RegSetValueExW(sub, L"pub", 0, REG_BINARY, pubkey_blob, pubkey_blob_len) != 0 ||
+	    RegSetValueExW(sub, L"pub", 0, REG_BINARY, pubkey_blob, (DWORD)pubkey_blob_len) != 0 ||
 	    RegSetValueExW(sub, L"type", 0, REG_DWORD, (BYTE*)&key->type, 4) != 0 ||
-	    RegSetValueExW(sub, L"comment", 0, REG_BINARY, comment, comment_len) != 0 ) {
+	    RegSetValueExW(sub, L"comment", 0, REG_BINARY, comment, (DWORD)comment_len) != 0 ) {
 		debug("failed to add key to store");
 		goto done;
 	}
@@ -452,3 +454,5 @@ int process_keyagent_request(struct sshbuf* request, struct sshbuf* response, st
 		return -1;		
 	}
 }
+
+#pragma warning(pop)

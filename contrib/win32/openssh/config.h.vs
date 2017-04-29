@@ -1579,19 +1579,7 @@
 /* type to use in place of socklen_t if not defined */
 /* #undef socklen_t */
 #define WIN32_LEAN_AND_MEAN 1
-#define _CRT_SECURE_NO_DEPRECATE 1
-#define _CRT_NONSTDC_NO_DEPRECATE 1
 #define WINDOWS 1
-
-/* Define if you must implement a startup_needs function for your platform */
-#define HAVE_STARTUP_NEEDS 1
-
-/* Define if your platform uses Winsock instead of BSD sockets (yeah, there are a lot of platforms like this :) */
-#define HAVE_WINSOCK 1
-
-#ifndef WIN32
-#define snprintf _snprintf
-#endif
 
 #define BROKEN_READV_COMPARISON
 
@@ -1693,10 +1681,7 @@
 
 #define __attribute__(A)
 
-// define building with MS Visual Studio Compiler and runtime and not with MingW/gcc compiler
-#define WIN32_VS 1
-
-/* disable inclusion of compatability defitnitions in CRT headers */
+/* disable inclusion of compatability definitions in CRT headers */
 #define __STDC__ 1
 
 #define umac128_new umac_new

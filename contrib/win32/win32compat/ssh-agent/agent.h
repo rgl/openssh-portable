@@ -1,5 +1,7 @@
 #include <Windows.h>
 #include <stdio.h>
+#define __attribute__(A)
+#include "log.h"
 #define MAX_MESSAGE_SIZE 256 * 1024
 
 #define SSH_ROOT L"SOFTWARE\\SSH"
