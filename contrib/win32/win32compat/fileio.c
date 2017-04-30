@@ -116,16 +116,20 @@ fileio_connect(struct w32_io* pio, char* name)
 		return -1;
 	}
 
-	h = CreateFileW(pipe_name, GENERIC_READ | GENERIC_WRITE, 0, 
-		NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+
+	do {
+		h = CreateFileW(pipe_name, GENERIC_READ | GENERIC_WRITE, 0, 
+			NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
 	
-	/* TODO - support nonblocking connect */
-	/* wait until we have a server pipe instance to connect */
-	while (h == INVALID_HANDLE_VALUE && GetLastError() == ERROR_PIPE_BUSY) {
+		if (h != INVALID_HANDLE_VALUE)
+			break;
+		if (GetLastError() != ERROR_PIPE_BUSY)
+			break;
+	
 		debug4("waiting for agent connection, retrying after 1 sec");
 		if ((ret = wait_for_any_event(NULL, 0, 1000) != 0) != 0)
 			goto cleanup;
-	}
+	} while(1);
 
 	if (h == INVALID_HANDLE_VALUE) {
 		debug3("unable to connect to pipe %ls, error: %d", name_w, GetLastError());
