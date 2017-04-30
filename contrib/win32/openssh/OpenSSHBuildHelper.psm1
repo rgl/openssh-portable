@@ -403,7 +403,7 @@ function Build-OpenSSH
 
     Start-OpenSSHBootstrap
 
-    if (-not (Test-Path (Join-Path $PSScriptRoot OpenSSLSDK)))
+    if (-not (Test-Path (Join-Path $PSScriptRoot LibreSSLSDK)))
     {
         Copy-LibreSSLSDK
     }
