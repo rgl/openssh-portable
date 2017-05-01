@@ -347,20 +347,24 @@ function Package-OpenSSH
             New-Item -ItemType Directory $DestinationPath | Out-Null
         }
         Copy-Item -Path $packageDir\* -Destination $DestinationPath -Force -Recurse
+        Write-Host 'Copied payload to' $DestinationPath
     }
     else {
         Remove-Item ($packageDir + '.zip') -Force -ErrorAction SilentlyContinue
         Compress-Archive -Path $packageDir -DestinationPath ($packageDir + '.zip')
+        Write-Host 'Packaged Payload - '$packageDir'.zip'
     }
     Remove-Item $packageDir -Recurse -Force -ErrorAction SilentlyContinue
 
     
     if ($DestinationPath -ne "") {
         Copy-Item -Path $symbolsDir\* -Destination $DestinationPath -Force -Recurse
+        Write-Host 'Copied symbols to' $DestinationPath
     }
     else {
         Remove-Item ($symbolsDir + '.zip') -Force -ErrorAction SilentlyContinue
         Compress-Archive -Path $symbolsDir -DestinationPath ($symbolsDir + '.zip')
+        Write-Host 'Packaged Symbols - '$symbolsDir'.zip'
     }
     Remove-Item $symbolsDir -Recurse -Force -ErrorAction SilentlyContinue
 }
