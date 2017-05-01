@@ -910,14 +910,14 @@ spawn_child(char* cmd, char** argv, int in, int out, int err, DWORD flags)
 
 	/* compute total cmdline len*/
 	if (add_module_path)
-		cmdline_len += strlen(w32_programdir()) + 1 + strlen(cmd) + 1 + 2;
+		cmdline_len += (DWORD)strlen(w32_programdir()) + 1 + (DWORD)strlen(cmd) + 1 + 2;
 	else
-		cmdline_len += strlen(cmd) + 1 + 2;
+		cmdline_len += (DWORD)strlen(cmd) + 1 + 2;
 
 	if (argv) {
 		t1 = argv;
 		while (*t1)
-			cmdline_len += strlen(*t1++) + 1 + 2;
+			cmdline_len += (DWORD)strlen(*t1++) + 1 + 2;
 	}
 
 	if ((cmdline = malloc(cmdline_len)) == NULL) {

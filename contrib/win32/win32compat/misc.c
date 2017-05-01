@@ -46,6 +46,7 @@
 #include "inc\utf.h"
 #include "signal_internal.h"
 #include "debug.h"
+#include "w32fd.h"
 
 static char* s_programdir = NULL;
 
@@ -255,23 +256,22 @@ w32_fopen_utf8(const char *path, const char *mode)
 		return NULL;
 	}
 
-	f = _wfopen(wpath, wmode);
+	if (_wfopen_s(&f, wpath, wmode) != 0)
+		return NULL;
 
-	if (f) {
-		/* BOM adjustments for file streams*/
-		if (mode[0] == 'w' && fseek(f, 0, SEEK_SET) != EBADF) {
-			/* write UTF-8 BOM - should we ?*/
-			/*if (fwrite(utf8_bom, sizeof(utf8_bom), 1, f) != 1) {
-				fclose(f);
-				return NULL;
-			}*/
+	/* BOM adjustments for file streams*/
+	if (mode[0] == 'w' && fseek(f, 0, SEEK_SET) != EBADF) {
+		/* write UTF-8 BOM - should we ?*/
+		/*if (fwrite(utf8_bom, sizeof(utf8_bom), 1, f) != 1) {
+			fclose(f);
+			return NULL;
+		}*/
 
-		} else if (mode[0] == 'r' && fseek(f, 0, SEEK_SET) != EBADF) {
-			/* read out UTF-8 BOM if present*/
-			if (fread(first3_bytes, 3, 1, f) != 1 ||
-			    memcmp(first3_bytes, utf8_bom, 3) != 0) {
-				fseek(f, 0, SEEK_SET);
-			}
+	} else if (mode[0] == 'r' && fseek(f, 0, SEEK_SET) != EBADF) {
+		/* read out UTF-8 BOM if present*/
+		if (fread(first3_bytes, 3, 1, f) != 1 ||
+			memcmp(first3_bytes, utf8_bom, 3) != 0) {
+			fseek(f, 0, SEEK_SET);
 		}
 	}
 
@@ -322,7 +322,7 @@ char*
 			if((actual_read + strlen(str_tmp)) >= n)
 				break;
 			memcpy(cp, str_tmp, strlen(str_tmp));
-			actual_read += strlen(str_tmp);
+			actual_read += (int)strlen(str_tmp);
 			cp += strlen(str_tmp);
 			
 		} while ((actual_read < n - 1) && *str_tmp != '\n');
@@ -374,10 +374,15 @@ w32_setvbuf(FILE *stream, char *buffer, int mode, size_t size) {
 char *
 w32_programdir()
 {
+	wchar_t* wpgmptr;
+
 	if (s_programdir != NULL)
 		return s_programdir;
 
-	if ((s_programdir = utf16_to_utf8(_wpgmptr)) == NULL)
+	if (_get_wpgmptr(&wpgmptr) != 0)
+		return NULL;
+
+	if ((s_programdir = utf16_to_utf8(wpgmptr)) == NULL)
 		return NULL;
 
 	/* null terminate after directory path */
@@ -672,6 +677,7 @@ w32_getcwd(char *buffer, int maxlen)
 int
 w32_mkdir(const char *path_utf8, unsigned short mode)
 {
+	mode_t curmask;
 	wchar_t *path_utf16 = utf8_to_utf16(sanitized_path(path_utf8));
 	if (path_utf16 == NULL) {
 		errno = ENOMEM;
@@ -683,7 +689,7 @@ w32_mkdir(const char *path_utf8, unsigned short mode)
 		return -1;
 	}
 
-	mode_t curmask = _umask(0);
+	curmask = _umask(0);
 	_umask(curmask);
 
 	returnStatus = _wchmod(path_utf16, mode & ~curmask & (_S_IREAD | _S_IWRITE));
@@ -759,7 +765,8 @@ realpath(const char *path, char resolved[PATH_MAX])
 	convertToForwardslash(tempPath);
 
 	resolved[0] = '/'; /* will be our first slash in /x:/users/test1 format */
-	strncpy(resolved + 1, tempPath, sizeof(tempPath) - 1);
+	if (strncpy_s(resolved+1, PATH_MAX - 1, tempPath, sizeof(tempPath) - 1) != 0)
+		return NULL;
 	return resolved;
 }
 
