@@ -75,7 +75,6 @@ openlog(char *ident, unsigned int option, int facility)
 		memcpy(p, L"log\0", 8);
 	}
 	
-	//BALU
 	errno_t err = _wsopen_s(&logfd, log_file, O_WRONLY | O_CREAT | O_APPEND, SH_DENYNO, S_IREAD | S_IWRITE);
 		
 	if (logfd != -1)

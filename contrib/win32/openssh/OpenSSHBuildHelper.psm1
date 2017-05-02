@@ -250,18 +250,25 @@ function Copy-LibreSSLSDK
 {
     [bool] $silent = -not $script:Verbose
 
-    $url = "https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.5.3-windows.zip"
+    $libreSSLDownloadUrl = "https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.5.3-windows.zip"
     $libreSSLZipPath = Join-Path $script:opensshPath "libressl-2.5.3-windows.zip"
-    $LibreSSLSDKPath = Join-Path $script:opensshPath $script:libreSSLSDKStr
+    $libreSSLSDKPath = Join-Path $script:opensshPath $script:libreSSLSDKStr
 
     #Delete files if exist
     Remove-Item -Path $libreSSLZipPath -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path $LibreSSLSDKPath -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $libreSSLSDKPath -Recurse -Force -ErrorAction SilentlyContinue
 
     #Download the LibreSSLSDK
     [Net.ServicePointManager]::SecurityProtocol = 'Ssl3, Tls, Tls11, Tls12'
-    $WebClient = New-Object System.Net.WebClient
-    $WebClient.DownloadFile($url, $libreSSLZipPath)
+    if ($env:APPVEYOR_JOB_ID)
+    {
+        Start-FileDownload $libreSSLDownloadUrl $libreSSLZipPath
+    }
+    else
+    {
+        $WebClient = New-Object System.Net.WebClient
+        $WebClient.DownloadFile($libreSSLDownloadUrl, $libreSSLZipPath)
+    }
     
     #Extract (unzip) the LibreSSLSDK
     Expand-Archive $libreSSLZipPath -DestinationPath $script:opensshPath -Force -ErrorAction SilentlyContinue -ErrorVariable e
@@ -277,7 +284,7 @@ function Copy-LibreSSLSDK
         Write-BuildMsg -AsError -ErrorAction Stop -Message "Rename to LibreSSLSDK has failed"
     }
     
-    Write-BuildMsg -AsInfo -Message "Successfully copied the libreSSLSDK to $LibreSSLSDKPath" -Silent:$silent
+    Write-BuildMsg -AsInfo -Message "Successfully copied the libreSSLSDK to $libreSSLSDKPath" -Silent:$silent
     
     #Delete .zip file
     Remove-Item -Path $libreSSLZipPath -Recurse -Force -ErrorAction SilentlyContinue
@@ -542,14 +549,14 @@ function Install-OpenSSH
     Start-Service sshd
 
     #Copy LibreSSL binary
-    $LibreSSLSDKPath = Join-Path $script:opensshPath $script:libreSSLSDKStr
+    $libreSSLSDKPath = Join-Path $script:opensshPath $script:libreSSLSDKStr
     if( $NativeHostArch -ieq "x86" )
     {
-        Copy-Item -Path $(Join-Path $LibreSSLSDKPath "x86\libcrypto-41.dll") -Destination $OpenSSHDir -Force -ErrorAction Stop
+        Copy-Item -Path $(Join-Path $libreSSLSDKPath "x86\libcrypto-41.dll") -Destination $OpenSSHDir -Force -ErrorAction Stop
     }
     else
     {
-        Copy-Item -Path $(Join-Path $LibreSSLSDKPath "x64\libcrypto-41.dll") -Destination $OpenSSHDir -Force -ErrorAction Stop
+        Copy-Item -Path $(Join-Path $libreSSLSDKPath "x64\libcrypto-41.dll") -Destination $OpenSSHDir -Force -ErrorAction Stop
     }
 
     Pop-Location
