@@ -56,7 +56,7 @@ struct passwd *privsep_pw = NULL;
 static char *config_file_name = _PATH_SERVER_CONFIG_FILE;
 int auth_sock = -1;
 
-int	 
+int
 auth2_methods_valid(const char * c, int i) {
 	return 1;
 }
@@ -72,7 +72,8 @@ mm_user_key_allowed(struct passwd *pw, Key *k, int i)
 	return 0;
 }
 
-int	 kexgex_server(struct ssh * sh) {
+int
+kexgex_server(struct ssh * sh) {
 	return -1;
 }
 
@@ -84,9 +85,8 @@ GetCurrentModulePath(wchar_t *path, int pathSize)
 		int lastSlashPos = 0;
 
 		for (i = 0; path[i]; i++) {
-			if (path[i] == L'/' || path[i] == L'\\') {
-				lastSlashPos = i;
-			}
+			if (path[i] == L'/' || path[i] == L'\\')
+				lastSlashPos = i;						
 		}
 
 		path[lastSlashPos] = 0;
@@ -127,15 +127,14 @@ config_log_level() {
 	return options.log_level;
 }
 
-int 
+int
 pubkey_allowed(struct sshkey* pubkey, HANDLE user_token) {
 	struct passwd *pw;
-	char *user = NULL, *user_home = NULL;
-	
+
 	if ((pw = w32_getpwtoken(user_token)) == NULL)
 		return 0;
 
-	return user_key_allowed(pw, pubkey, 1);        
+	return user_key_allowed(pw, pubkey, 1);
 }
 
 #pragma warning(pop)
