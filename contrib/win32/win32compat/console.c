@@ -35,8 +35,11 @@
 #include <string.h>
 #include <windows.h>
 #include <conio.h>
+#include <io.h>
 
+#include "debug.h"
 #include "console.h"
+#include "ansiprsr.h"
 
 HANDLE	hOutputConsole = NULL;
 DWORD	dwSavedAttributes = 0;
@@ -113,8 +116,13 @@ ConEnterRawMode(DWORD OutputHandle, BOOL fSmartInit)
 
 	dwAttributes |= (DWORD)ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 
-	if (NULL != getenv("SSH_TERM_CONHOST_PARSER"))
-		isConHostParserEnabled = atoi(getenv("SSH_TERM_CONHOST_PARSER"));
+	char *envValue = NULL;
+	_dupenv_s(&envValue, NULL, "SSH_TERM_CONHOST_PARSER");
+	
+	if (NULL != envValue) {
+		isConHostParserEnabled = atoi(envValue);
+		free(envValue);
+	}		
 
 	/* We use our custom ANSI parser when
 	 * a) User sets the environment variable "SSH_TERM_CONHOST_PARSER" to 0

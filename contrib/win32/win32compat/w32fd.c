@@ -76,22 +76,46 @@ fd_table_initialize()
 	memset(&w32_io_stdin, 0, sizeof(w32_io_stdin));
 	w32_io_stdin.std_handle = STD_INPUT_HANDLE;
 	w32_io_stdin.type = NONSOCK_SYNC_FD;
-	if (getenv(SSH_ASYNC_STDIN) && strcmp(getenv(SSH_ASYNC_STDIN), "1") == 0)
-		w32_io_stdin.type = NONSOCK_FD;
+
+	char *envValue = NULL;
+	_dupenv_s(&envValue, NULL, SSH_ASYNC_STDIN);
+	if (NULL != envValue) {
+		if(strcmp(envValue, "1") == 0)
+			w32_io_stdin.type = NONSOCK_FD;
+		
+		free(envValue);
+	}
+
 	_putenv_s(SSH_ASYNC_STDIN, "");
 	fd_table_set(&w32_io_stdin, STDIN_FILENO);
 	memset(&w32_io_stdout, 0, sizeof(w32_io_stdout));
 	w32_io_stdout.std_handle = STD_OUTPUT_HANDLE;
 	w32_io_stdout.type = NONSOCK_SYNC_FD;
-	if (getenv(SSH_ASYNC_STDOUT) && strcmp(getenv(SSH_ASYNC_STDOUT), "1") == 0)
-		w32_io_stdout.type = NONSOCK_FD;
+	
+	envValue = NULL;
+	_dupenv_s(&envValue, NULL, SSH_ASYNC_STDOUT);
+	if (NULL != envValue) {
+		if(strcmp(envValue, "1") == 0)
+			w32_io_stdout.type = NONSOCK_FD;
+
+		free(envValue);
+	}
+
 	_putenv_s(SSH_ASYNC_STDOUT, "");
 	fd_table_set(&w32_io_stdout, STDOUT_FILENO);
 	memset(&w32_io_stderr, 0, sizeof(w32_io_stderr));
 	w32_io_stderr.std_handle = STD_ERROR_HANDLE;
 	w32_io_stderr.type = NONSOCK_SYNC_FD;
-	if (getenv(SSH_ASYNC_STDERR) && strcmp(getenv(SSH_ASYNC_STDERR), "1") == 0)
-		w32_io_stderr.type = NONSOCK_FD;
+
+	envValue = NULL;
+	_dupenv_s(&envValue, NULL, SSH_ASYNC_STDERR);
+	if (NULL != envValue) {
+		if(strcmp(envValue, "1") == 0)
+			w32_io_stderr.type = NONSOCK_FD;
+
+		free(envValue);
+	}
+
 	_putenv_s(SSH_ASYNC_STDERR, "");
 	fd_table_set(&w32_io_stderr, STDERR_FILENO);
 	return 0;

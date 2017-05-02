@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <Shlwapi.h>
+#include <conio.h>
 
 #include "inc\unistd.h"
 #include "inc\sys\stat.h"
@@ -465,8 +466,9 @@ strmode(mode_t mode, char *p)
 	 * As of now we are keeping "*" for everything.
 	 * TODO - figure out if there is a better option
 	 */
-	const char *permissions = "********* ";
+	const char *permissions = "********* ";	
 	strncpy(p, permissions, strlen(permissions) + 1);
+
 	p = p + strlen(p);
 	*p = '\0';
 }
@@ -677,7 +679,7 @@ w32_getcwd(char *buffer, int maxlen)
 int
 w32_mkdir(const char *path_utf8, unsigned short mode)
 {
-	mode_t curmask;
+	int curmask;
 	wchar_t *path_utf16 = utf8_to_utf16(sanitized_path(path_utf8));
 	if (path_utf16 == NULL) {
 		errno = ENOMEM;
@@ -689,8 +691,9 @@ w32_mkdir(const char *path_utf8, unsigned short mode)
 		return -1;
 	}
 
-	curmask = _umask(0);
-	_umask(curmask);
+	errno_t error = _umask_s(0, &curmask);
+	if(!error)
+		_umask_s(curmask, &curmask);
 
 	returnStatus = _wchmod(path_utf16, mode & ~curmask & (_S_IREAD | _S_IWRITE));
 	free(path_utf16);
@@ -778,7 +781,7 @@ sanitized_path(const char *path)
 	if (path[0] == '/' && path[1]) {
 		if (path[2] == ':') {
 			if (path[3] == '\0') { /* make "/x:" as "x:\\" */
-				strncpy(newPath, path + 1, strlen(path) - 1);
+				strncpy_s(newPath, sizeof(PATH_MAX), path + 1, strlen(path) - 1);
 				newPath[2] = '\\';
 				newPath[3] = '\0';
 
@@ -855,7 +858,6 @@ readpassphrase(const char *prompt, char *out, size_t out_len, int flags) {
 	char *askpass = NULL;
 	char *ret = NULL;
 
-	DWORD mode;
 	size_t len = 0;
 	int retr = 0;
 

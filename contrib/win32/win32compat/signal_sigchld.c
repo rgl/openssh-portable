@@ -31,6 +31,7 @@
 #include "signal_internal.h"
 #include "inc\sys\wait.h"
 #include "debug.h"
+#include "inc\signal.h"
 
 struct _children children;
 
@@ -135,7 +136,7 @@ w32_kill(int pid, int sig)
 
 	/*  for child processes - only SIGTERM supported*/
 	child_index = -1;
-	for (i = 0; i < children.num_children; i++)
+	for (i = 0; i < (int)children.num_children; i++)
 		if (children.process_id[i] == pid) {
 			child_index = i;
 			break;

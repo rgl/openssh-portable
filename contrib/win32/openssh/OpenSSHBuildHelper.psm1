@@ -251,7 +251,6 @@ function Copy-LibreSSLSDK
     [bool] $silent = -not $script:Verbose
 
     $url = "https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.5.3-windows.zip"
-    $script:opensshPath = Join-Path $script:gitRoot "openssh-portable\contrib\win32\openssh"
     $libreSSLZipPath = Join-Path $script:opensshPath "libressl-2.5.3-windows.zip"
     $LibreSSLSDKPath = Join-Path $script:opensshPath $script:libreSSLSDKStr
 
@@ -407,6 +406,7 @@ function Build-OpenSSH
 
     Start-OpenSSHBootstrap
 
+    $script:opensshPath = Join-Path $script:gitRoot "openssh-portable\contrib\win32\openssh"
     if (-not (Test-Path (Join-Path $PSScriptRoot LibreSSLSDK)))
     {
         Copy-LibreSSLSDK

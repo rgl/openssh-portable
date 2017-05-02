@@ -154,7 +154,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     
     # copy new sshd_config    
     Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) (Join-Path $script:OpenSSHBinPath sshd_config) -Force    
-    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force    
+    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force
     Restart-Service sshd -Force
    
     #Backup existing known_hosts and replace with test version

@@ -30,6 +30,7 @@
 #include <Windows.h>
 #include <io.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include "inc/sys/stat.h"
 
 #include "inc\syslog.h"
@@ -73,8 +74,10 @@ openlog(char *ident, unsigned int option, int facility)
 		p += wcslen(tail + 1) - 3;
 		memcpy(p, L"log\0", 8);
 	}
-
-	logfd = _wopen(log_file, O_WRONLY | O_CREAT | O_APPEND, S_IREAD | S_IWRITE);
+	
+	//BALU
+	errno_t err = _wsopen_s(&logfd, log_file, O_WRONLY | O_CREAT | O_APPEND, SH_DENYNO, S_IREAD | S_IWRITE);
+		
 	if (logfd != -1)
 		SetHandleInformation((HANDLE)_get_osfhandle(logfd), HANDLE_FLAG_INHERIT, 0);
 }
@@ -101,5 +104,5 @@ syslog(int priority, const char *format, const char *formatBuffer)
 		st.wMilliseconds, formatBuffer);
 	msgbufTimestamp[sizeof(msgbufTimestamp) - 1] = '\0';
 	if (r > 0 && r < sizeof(msgbufTimestamp))
-		_write(logfd, msgbufTimestamp, strlen(msgbufTimestamp));
+		_write(logfd, msgbufTimestamp, (unsigned int)strlen(msgbufTimestamp));
 }
