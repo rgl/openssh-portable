@@ -259,7 +259,7 @@ function Copy-LibreSSLSDK
     Remove-Item -Path $LibreSSLSDKPath -Recurse -Force -ErrorAction SilentlyContinue
 
     #Download the LibreSSLSDK
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    [Net.ServicePointManager]::SecurityProtocol = 'Ssl3, Tls, Tls11, Tls12'
     $WebClient = New-Object System.Net.WebClient
     $WebClient.DownloadFile($url, $libreSSLZipPath)
     
