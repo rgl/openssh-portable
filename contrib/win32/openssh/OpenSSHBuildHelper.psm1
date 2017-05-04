@@ -8,8 +8,7 @@ Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -force -DisableNameChecking
 [bool] $script:Verbose = $false
 [string] $script:BuildLogFile = $null
 [string] $script:libreSSLSDKStr = "LibreSSLSDK"
-[string] $script:opensshPath = $null
-
+[string] $script:win32OpenSSHPath = $null
 <#
     Called by Write-BuildMsg to write to the build log, if it exists. 
 #>
@@ -246,48 +245,41 @@ function Start-OpenSSHBootstrap
     }
 }
 
+function Clone-Win32OpenSSH
+{
+    [bool] $silent = -not $script:Verbose
+
+    if (-not (Test-Path -Path $script:win32OpenSSHPath -PathType Container))
+    {
+        Write-BuildMsg -AsInfo -Message "clone repo Win32-OpenSSH" -Silent:$silent
+        Push-Location $gitRoot
+        git clone -q --recursive https://github.com/PowerShell/Win32-OpenSSH.git $script:win32OpenSSHPath
+        Pop-Location
+    }
+    
+    Write-BuildMsg -AsInfo -Message "pull latest from repo Win32-OpenSSH" -Silent:$silent
+    Push-Location $script:win32OpenSSHPath
+    git fetch -q origin
+    git checkout -qf L1-Prod
+    Pop-Location
+}
+
+function Delete-Win32OpenSSH
+{
+    Remove-Item -Path $script:win32OpenSSHPath -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 function Copy-LibreSSLSDK
 {
     [bool] $silent = -not $script:Verbose
 
-    $libreSSLDownloadUrl = "https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.5.3-windows.zip"
-    $libreSSLZipPath = Join-Path $script:opensshPath "libressl-2.5.3-windows.zip"
-    $libreSSLSDKPath = Join-Path $script:opensshPath $script:libreSSLSDKStr
-
-    #Delete files if exist
-    Remove-Item -Path $libreSSLZipPath -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path $libreSSLSDKPath -Recurse -Force -ErrorAction SilentlyContinue
-
-    #Download the LibreSSLSDK
-    [Net.ServicePointManager]::SecurityProtocol = 'Ssl3, Tls, Tls11, Tls12'
-    if ($env:APPVEYOR_JOB_ID)
-    {
-        Start-FileDownload $libreSSLDownloadUrl $libreSSLZipPath
-    }
-    else
-    {
-        $WebClient = New-Object System.Net.WebClient
-        $WebClient.DownloadFile($libreSSLDownloadUrl, $libreSSLZipPath)
-    }
-    
-    #Extract (unzip) the LibreSSLSDK
-    Expand-Archive $libreSSLZipPath -DestinationPath $script:opensshPath -Force -ErrorAction SilentlyContinue -ErrorVariable e
+    $sourcePath  = Join-Path $script:win32OpenSSHPath "contrib\win32\openssh\LibreSSLSDK"
+    Write-BuildMsg -AsInfo -Message "copying $sourcePath" -Silent:$silent
+    Copy-Item -Container -Path $sourcePath -Destination $PSScriptRoot -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable e
     if($e -ne $null)
     {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "LibreSSLSDK unzip failed"
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "Copy OpenSSL from $sourcePath to $PSScriptRoot failed"
     }
-    
-    #Rename "libressl-2.5.3-windows" to "LibreSSLSDK"
-    Rename-Item -path ($libreSSLZipPath.Replace(".zip","")) -newName $script:libreSSLSDKStr -Force -ErrorAction SilentlyContinue -ErrorVariable e
-    if($e -ne $null)
-    {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "Rename to LibreSSLSDK has failed"
-    }
-    
-    Write-BuildMsg -AsInfo -Message "Successfully copied the libreSSLSDK to $libreSSLSDKPath" -Silent:$silent
-    
-    #Delete .zip file
-    Remove-Item -Path $libreSSLZipPath -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 function Package-OpenSSH
@@ -419,10 +411,12 @@ function Build-OpenSSH
 
     Start-OpenSSHBootstrap
 
-    $script:opensshPath = Join-Path $script:gitRoot "openssh-portable\contrib\win32\openssh"
+    $script:win32OpenSSHPath = join-path $script:gitRoot "Win32-OpenSSH"
     if (-not (Test-Path (Join-Path $PSScriptRoot LibreSSLSDK)))
     {
+        Clone-Win32OpenSSH
         Copy-LibreSSLSDK
+        Delete-Win32OpenSSH
     }
 
     if ($NoOpenSSL) 
@@ -547,9 +541,9 @@ function Install-OpenSSH
     Set-Service sshd -StartupType Automatic 
     Set-Service ssh-agent -StartupType Automatic
     Start-Service sshd
-
-    #Copy LibreSSL binary
-    $libreSSLSDKPath = Join-Path $script:opensshPath $script:libreSSLSDKStr
+    
+    #copy libcrypto-41 dll
+    $libreSSLSDKPath = Join-Path $PSScriptRoot $script:libreSSLSDKStr
     if( $NativeHostArch -ieq "x86" )
     {
         Copy-Item -Path $(Join-Path $libreSSLSDKPath "x86\libcrypto-41.dll") -Destination $OpenSSHDir -Force -ErrorAction Stop
@@ -596,11 +590,9 @@ function UnInstall-OpenSSH
     {
         [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
     }
-
     Pop-Location
     
     Remove-Item -Path $OpenSSHDir -Recurse -Force -ErrorAction SilentlyContinue
 }
-
 
 Export-ModuleMember -Function Build-OpenSSH, Get-BuildLogFile, Install-OpenSSH, UnInstall-OpenSSH, Package-OpenSSH
