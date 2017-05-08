@@ -48,6 +48,7 @@
 #include "signal_internal.h"
 #include "debug.h"
 #include "w32fd.h"
+#include "inc\string.h"
 
 static char* s_programdir = NULL;
 
@@ -846,7 +847,9 @@ w32_strerror(int errnum)
 {
 	if (errnum >= EADDRINUSE  && errnum <= EWOULDBLOCK)
 		return _sys_errlist_ext[errnum - EADDRINUSE];
-	return strerror(errnum);
+	
+	strerror_s(errorBuf, ERROR_MSG_MAXLEN, errnum);
+	return errorBuf;
 }
 /* 
  * Temporary implementation of readpassphrase. 
