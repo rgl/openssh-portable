@@ -278,7 +278,7 @@ function Copy-LibreSSLSDK
     Copy-Item -Container -Path $sourcePath -Destination $PSScriptRoot -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable e
     if($e -ne $null)
     {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "Copy OpenSSL from $sourcePath to $PSScriptRoot failed"
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "Copy LibreSSLSDK from $sourcePath to $PSScriptRoot failed"
     }
 }
 
@@ -351,24 +351,24 @@ function Package-OpenSSH
             New-Item -ItemType Directory $DestinationPath -Force | Out-Null
         }
         Copy-Item -Path $packageDir\* -Destination $DestinationPath -Force -Recurse
-        Write-Host 'Copied payload to' $DestinationPath
+        Write-BuildMsg -AsInfo -Message "Copied payload to $DestinationPath"
     }
     else {
         Remove-Item ($packageDir + '.zip') -Force -ErrorAction SilentlyContinue
         Compress-Archive -Path $packageDir -DestinationPath ($packageDir + '.zip')
-        Write-Host 'Packaged Payload - '$packageDir'.zip'
+        Write-BuildMsg -AsInfo -Message "Packaged Payload - '$packageDir'.zip"
     }
     Remove-Item $packageDir -Recurse -Force -ErrorAction SilentlyContinue
 
     
     if ($DestinationPath -ne "") {
         Copy-Item -Path $symbolsDir\* -Destination $DestinationPath -Force -Recurse
-        Write-Host 'Copied symbols to' $DestinationPath
+        Write-BuildMsg -AsInfo -Message "Copied symbols to $DestinationPath"
     }
     else {
         Remove-Item ($symbolsDir + '.zip') -Force -ErrorAction SilentlyContinue
         Compress-Archive -Path $symbolsDir -DestinationPath ($symbolsDir + '.zip')
-        Write-Host 'Packaged Symbols - '$symbolsDir'.zip'
+        Write-BuildMsg -AsInfo -Message "Packaged Symbols - '$symbolsDir'.zip"
     }
     Remove-Item $symbolsDir -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -509,10 +509,7 @@ function Install-OpenSSH
     }
 
     #We need to uninstall first
-    if(Test-Path -Path $OpenSSHDir)
-    {
-        UnInstall-OpenSSH
-    }
+    UnInstall-OpenSSH
     
     Package-OpenSSH -NativeHostArch $NativeHostArch -Configuration $Configuration -DestinationPath $OpenSSHDir
 
@@ -563,36 +560,39 @@ function Install-OpenSSH
 #>
 function UnInstall-OpenSSH
 {
- 
     [CmdletBinding()]
     param
     ( 
         [string]$OpenSSHDir = "$env:SystemDrive\OpenSSH"
     )
 
-    Push-Location $OpenSSHDir
     if((Get-Service ssh-agent -ErrorAction Ignore) -ne $null) {
         Stop-Service ssh-agent -Force -ErrorAction SilentlyContinue
     }
-    &( "$OpenSSHDir\uninstall-sshd.ps1")
 
-    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
-    $newMachineEnvironmentPath = $machinePath
-    if ($machinePath.ToLower().Contains($OpenSSHDir.ToLower()))
+    if(Test-Path -Path $OpenSSHDir)
     {
-        $newMachineEnvironmentPath.Replace("$OpenSSHDir;", '')
-        $env:Path = $env:Path.Replace("$OpenSSHDir;", '')
-    }
+        Push-Location $OpenSSHDir
+        &( "$OpenSSHDir\uninstall-sshd.ps1")
 
-    # Update machine environment path
-    # machine will be reboot after Uninstall-OpenSSH
-    if ($newMachineEnvironmentPath -ne $machinePath)
-    {
-        [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
+        $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
+        $newMachineEnvironmentPath = $machinePath
+        if ($machinePath.ToLower().Contains($OpenSSHDir.ToLower()))
+        {
+            $newMachineEnvironmentPath.Replace("$OpenSSHDir;", '')
+            $env:Path = $env:Path.Replace("$OpenSSHDir;", '')
+        }
+
+        # Update machine environment path
+        # machine will be reboot after Uninstall-OpenSSH
+        if ($newMachineEnvironmentPath -ne $machinePath)
+        {
+            [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
+        }
+        Pop-Location
+
+        Remove-Item -Path $OpenSSHDir -Recurse -Force -ErrorAction SilentlyContinue
     }
-    Pop-Location
-    
-    Remove-Item -Path $OpenSSHDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 Export-ModuleMember -Function Build-OpenSSH, Get-BuildLogFile, Install-OpenSSH, UnInstall-OpenSSH, Package-OpenSSH

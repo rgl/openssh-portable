@@ -258,8 +258,10 @@ w32_fopen_utf8(const char *path, const char *mode)
 		return NULL;
 	}
 
-	if (_wfopen_s(&f, wpath, wmode) != 0)
+	if ((_wfopen_s(&f, wpath, wmode) != 0) || f == NULL) {
+		error("Failed to open file:%s error:%d", path, errno);
 		return NULL;
+	}		
 
 	/* BOM adjustments for file streams*/
 	if (mode[0] == 'w' && fseek(f, 0, SEEK_SET) != EBADF) {
@@ -435,7 +437,7 @@ w32_ioctl(int d, int request, ...)
 	}
 }
 
-/* p should be atlest 12 bytes long*/
+/* p should be at least 12 bytes long*/
 void
 strmode(mode_t mode, char *p)
 {
@@ -467,7 +469,7 @@ strmode(mode_t mode, char *p)
 	 * As of now we are keeping "*" for everything.
 	 * TODO - figure out if there is a better option
 	 */
-	const char *permissions = "********* ";	
+	const char *permissions = "********* ";
 	strncpy(p, permissions, strlen(permissions) + 1);
 
 	p = p + strlen(p);
@@ -753,10 +755,10 @@ realpath(const char *path, char resolved[PATH_MAX])
 		return NULL;
 	}
 
-	if ((path[0] == '/') && path[1] && (path[2] == ':')) 
-		memcpy(resolved, path + 1, path_len); /* skip the first '/' */
+	if ((path_len >= 2) && (path[0] == '/') && path[1] && (path[2] == ':'))
+		strncpy_s(resolved, PATH_MAX, path + 1, path_len); /* skip the first '/' */
 	else
-		memcpy(resolved, path, path_len + 1);
+		strncpy_s(resolved, PATH_MAX, path, path_len + 1);
 
 	if ((resolved[0]) && (resolved[1] == ':') && (resolved[2] == '\0')) { /* make "x:" as "x:\\" */
 		resolved[2] = '\\';

@@ -1340,6 +1340,7 @@ ConSaveScreenHandle(SCREEN_HANDLE hScreen)
 		pScreenRec = (PSCREEN_RECORD)malloc(sizeof(SCREEN_RECORD));
 		if (pScreenRec == NULL)
 			fatal("out of memory");
+		
 		pScreenRec->pScreenBuf = NULL;
 	}
 

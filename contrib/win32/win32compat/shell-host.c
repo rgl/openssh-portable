@@ -636,7 +636,7 @@ ProcessEvent(void *p)
 			return dwError;
 		}
 
-		if (readRect.Top > (SHORT) currentLine)
+		if (readRect.Top > currentLine)
 			for (SHORT n = currentLine; n < readRect.Top; n++)
 				SendLF(pipe_out);
 
@@ -1061,27 +1061,37 @@ cleanup:
 	dwStatus = GetLastError();
 	if (child != INVALID_HANDLE_VALUE)
 		TerminateProcess(child, 0);
+
 	if (monitor_thread != NULL) {
 		WaitForSingleObject(monitor_thread, INFINITE);
 		CloseHandle(monitor_thread);
 	}
+
 	if (ux_thread != NULL) {
 		TerminateThread(ux_thread, S_OK);
 		CloseHandle(ux_thread);
 	}
+
 	if (io_thread != NULL) {
 		TerminateThread(io_thread, 0);
 		CloseHandle(io_thread);
 	}
+
 	if (hEventHook)
 		__UnhookWinEvent(hEventHook);
+	
 	FreeConsole();
+	
 	if (child != INVALID_HANDLE_VALUE) {
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
 	}
+	
 	FreeQueueEvent();
 	DeleteCriticalSection(&criticalSection);
+	
+	if(cmd != NULL)
+		free(cmd);
 
 	return child_exit_code;
 }
@@ -1231,6 +1241,9 @@ cleanup:
 
 	if (pi.hThread != INVALID_HANDLE_VALUE)
 		CloseHandle(pi.hThread);
+
+	if (cmd != NULL)
+		free(cmd);
 
 	return child_exit_code;
 }
