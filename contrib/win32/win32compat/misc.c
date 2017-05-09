@@ -258,7 +258,7 @@ w32_fopen_utf8(const char *path, const char *mode)
 		return NULL;
 	}
 
-	if ((_wfopen_s(&f, wpath, wmode) != 0) || f == NULL) {
+	if (_wfopen_s(&f, wpath, wmode) != 0) {
 		error("Failed to open file:%s error:%d", path, errno);
 		return NULL;
 	}		
