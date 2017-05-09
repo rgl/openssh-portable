@@ -534,7 +534,7 @@ function Install-OpenSSH
     
     Set-Service sshd -StartupType Automatic 
     Set-Service ssh-agent -StartupType Automatic
-    Start-Service sshd
+    ReStart-Service sshd
     
     #copy libcrypto-41 dll
     $libreSSLSDKPath = Join-Path $PSScriptRoot $script:libreSSLSDKStr
