@@ -416,7 +416,7 @@ function Build-OpenSSH
     {
         Clone-Win32OpenSSH
         Copy-LibreSSLSDK
-        Delete-Win32OpenSSH
+        #Delete-Win32OpenSSH
     }
 
     if ($NoOpenSSL) 
