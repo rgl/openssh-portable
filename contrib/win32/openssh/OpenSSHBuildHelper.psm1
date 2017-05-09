@@ -508,9 +508,6 @@ function Install-OpenSSH
         }
     }
 
-    #We need to uninstall first
-    UnInstall-OpenSSH
-    
     Package-OpenSSH -NativeHostArch $NativeHostArch -Configuration $Configuration -DestinationPath $OpenSSHDir
 
     Push-Location $OpenSSHDir 
