@@ -285,10 +285,12 @@
       <ExcludedFromBuild Condition="$(UseOpenSSL)==false">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)kexgexs.c" />
+    <ClCompile Include="..\..\..\sshspawnchild.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(OpenSSH-Src-Path)crypto-wrap.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)sshfileperm.h" />
+    <ClInclude Include="..\..\..\sshspawnchild.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

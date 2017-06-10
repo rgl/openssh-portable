@@ -50,6 +50,7 @@
 #include <sys\utime.h>
 #include "misc_internal.h"
 #include "debug.h"
+#include "..\..\..\sshspawnchild.h"
 
 /* internal table that stores the fd to w32_io mapping*/
 struct w32fd_table {
@@ -899,7 +900,7 @@ w32_fsync(int fd)
 * this decoration is done only when additional arguments are passed in argv
 */
 int
-spawn_child(char* cmd, char** argv, int in, int out, int err, unsigned long flags)
+spawn_child(char** arglist, int* pin, int* pout, int err, unsigned long flags)
 {
 	PROCESS_INFORMATION pi;
 	STARTUPINFOW si;
@@ -907,8 +908,12 @@ spawn_child(char* cmd, char** argv, int in, int out, int err, unsigned long flag
 	char *cmdline, *t, **t1;
 	DWORD cmdline_len = 0;
 	wchar_t * cmdline_utf16;
-	int add_module_path = 0, ret = -1;
+	int add_module_path = 0, ret = -1, in, out;
+	
+	fcntl(pout[0], F_SETFD, FD_CLOEXEC);
+	fcntl(pin[1], F_SETFD, FD_CLOEXEC);
 
+	char* cmd = arglist ? arglist[0] : NULL;
 	/* should module path be added */
 	do {
 		if (!cmd)
@@ -927,6 +932,7 @@ spawn_child(char* cmd, char** argv, int in, int out, int err, unsigned long flag
 	else
 		cmdline_len += strlen(cmd) + 1 + 2;
 
+	char** argv = arglist + 1;
 	if (argv) {
 		t1 = argv;
 		while (*t1)
@@ -972,7 +978,9 @@ spawn_child(char* cmd, char** argv, int in, int out, int err, unsigned long flag
 		errno = ENOMEM;
 		goto cleanup;
 	}
-
+	
+	in = pin[0];
+	out = pout[1];
 	memset(&si, 0, sizeof(STARTUPINFOW));
 	si.cb = sizeof(STARTUPINFOW);
 	si.hStdInput = w32_fd_to_handle(in);

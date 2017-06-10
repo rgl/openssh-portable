@@ -118,6 +118,7 @@
 #include "misc.h"
 #include "progressmeter.h"
 #include "utf8.h"
+#include "sshspawnchild.h"
 
 extern char *__progname;
 
@@ -284,7 +285,6 @@ do_cmd(char *host, char *remuser, char *cmd, int *fdin, int *fdout)
 	signal(SIGTTOU, suspchild);
 
 	/* Fork a child to execute the command on the remote host using ssh. */
-#ifdef WINDOWS
 	/* generate command line and spawn_child */
 	replacearg(&args, 0, "%s", ssh_program);
 	if (remuser != NULL) {
@@ -293,38 +293,11 @@ do_cmd(char *host, char *remuser, char *cmd, int *fdin, int *fdout)
 	}
 	addargs(&args, "--");
 	addargs(&args, "%s", host);
-	addargs(&args, "%s", cmd);
+	addargs(&args, "%s", cmd);	
 
-	fcntl(pout[0], F_SETFD, FD_CLOEXEC);
-	fcntl(pin[1], F_SETFD, FD_CLOEXEC);
+	do_cmd_pid = spawn_child(args.list, pin, pout, STDERR_FILENO, 0);
 
-	do_cmd_pid = spawn_child(args.list[0], args.list + 1, pin[0], pout[1], STDERR_FILENO, 0);
-
-#else /* !WINDOWS */
-	do_cmd_pid = fork();
-#endif /* !WINDOWS */
-	if (do_cmd_pid == 0) {
-		/* Child. */
-		close(pin[1]);
-		close(pout[0]);
-		dup2(pin[0], 0);
-		dup2(pout[1], 1);
-		close(pin[0]);
-		close(pout[1]);
-
-		replacearg(&args, 0, "%s", ssh_program);
-		if (remuser != NULL) {
-			addargs(&args, "-l");
-			addargs(&args, "%s", remuser);
-		}
-		addargs(&args, "--");
-		addargs(&args, "%s", host);
-		addargs(&args, "%s", cmd);
-
-		execvp(ssh_program, args.list);
-		perror(ssh_program);
-		exit(1);
-	} else if (do_cmd_pid == -1) {
+	if (do_cmd_pid == -1) {
 		fatal("fork: %s", strerror(errno));
 	}
 	/* Parent.  Close the other side, and return the local side. */
