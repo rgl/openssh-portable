@@ -1042,18 +1042,18 @@ start_with_pty(wchar_t *command)
 	/* monitor child exist */
 	child = pi.hProcess;
 	monitor_thread = CreateThread(NULL, 0, MonitorChild, NULL, 0, NULL);
-	if (monitor_thread == NULL)
+	if (IS_INVALID_HANDLE(monitor_thread))
 		goto cleanup;
 
 	/* disable Ctrl+C hander in this process*/
 	SetConsoleCtrlHandler(NULL, TRUE);
 
 	io_thread = CreateThread(NULL, 0, ProcessPipes, NULL, 0, NULL);
-	if (io_thread == NULL)
+	if (IS_INVALID_HANDLE(io_thread))
 		goto cleanup;
 
 	ux_thread = CreateThread(NULL, 0, ProcessEventQueue, NULL, 0, NULL);
-	if (ux_thread == NULL)
+	if (IS_INVALID_HANDLE(ux_thread))
 		goto cleanup;
 
 	ProcessMessages(NULL);
@@ -1062,17 +1062,15 @@ cleanup:
 	if (child != INVALID_HANDLE_VALUE)
 		TerminateProcess(child, 0);
 
-	if (monitor_thread != NULL) {
+	if (!IS_INVALID_HANDLE(monitor_thread)) {
 		WaitForSingleObject(monitor_thread, INFINITE);
 		CloseHandle(monitor_thread);
 	}
-
-	if (ux_thread != NULL) {
+	if (!IS_INVALID_HANDLE(ux_thread)) {
 		TerminateThread(ux_thread, S_OK);
 		CloseHandle(ux_thread);
 	}
-
-	if (io_thread != NULL) {
+	if (!IS_INVALID_HANDLE(io_thread)) {
 		TerminateThread(io_thread, 0);
 		CloseHandle(io_thread);
 	}
@@ -1115,7 +1113,10 @@ start_withno_pty(wchar_t *command)
 	PROCESS_INFORMATION pi;
 	wchar_t *cmd = (wchar_t *) malloc(sizeof(wchar_t) * MAX_CMD_LEN);
 	SECURITY_ATTRIBUTES sa;
-	BOOL ret;
+	BOOL ret, process_input = FALSE, run_under_cmd = FALSE;
+	size_t command_len;
+	char buf[128];
+	DWORD rd = 0, wr = 0, i = 0;
 
 	pipe_in = GetStdHandle(STD_INPUT_HANDLE);
 	pipe_out = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -1142,24 +1143,68 @@ start_withno_pty(wchar_t *command)
 	GOTO_CLEANUP_ON_FALSE(SetHandleInformation(pipe_in, HANDLE_FLAG_INHERIT, 0));
 	GOTO_CLEANUP_ON_FALSE(SetHandleInformation(child_pipe_write, HANDLE_FLAG_INHERIT, 0));
 
-	/*TODO - pick this up from system32*/
-	cmd[0] = L'\0';
-	GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L"cmd.exe"));
-	if (command) {
-		GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L" /c"));
-		GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L" "));
-		GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, command));
+	/*
+	* check if the input needs to be processed (ex for CRLF translation)
+	* input stream needs to be processed when running the command
+	* within shell processor. This is needed when
+	*  - launching a interactive shell (-nopty)
+	*    ssh -T user@target
+	*  - launching cmd explicity
+	*    ssh user@target cmd
+	*  - executing a cmd command
+	*    ssh user@target dir
+	*  - executing a cmd command within a cmd
+	*    ssh user@target cmd /c dir
+	*/
+
+	if (!command)
+		process_input = TRUE;
+	else {
+		command_len = wcsnlen_s(command, MAX_CMD_LEN);
+		if ((command_len >= 3 && wcsncmp(command, L"cmd", 4) == 0) ||
+		    (command_len >= 7 && wcsncmp(command, L"cmd.exe", 8) == 0) ||
+		    (command_len >= 4 && wcsncmp(command, L"cmd ", 4) == 0) ||
+		    (command_len >= 8 && wcsncmp(command, L"cmd.exe ", 8) == 0))
+			process_input = TRUE;
 	}
 
-	GOTO_CLEANUP_ON_FALSE(CreateProcess(NULL, cmd, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi));
+	/* Try launching command as is first */
+	if (command) {
+		ret = CreateProcessW(NULL, command, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
+		if (ret == FALSE) {
+			/* it was probably this case - ssh user@target dir */
+			if (GetLastError() == ERROR_FILE_NOT_FOUND)
+				run_under_cmd = TRUE;
+			else
+				goto cleanup;
+		}
+	}
+	else
+		run_under_cmd = TRUE;
 
+	/* if above failed with FILE_NOT_FOUND, try running the provided command under cmd*/
+	if (run_under_cmd) {
+		/*TODO - pick this up from system32*/
+		cmd[0] = L'\0';
+		GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L"cmd.exe"));
+		if (command) {
+			GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L" /c"));
+			GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L" "));
+			GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, command));
+		}
+	
+		GOTO_CLEANUP_ON_FALSE(CreateProcessW(NULL, cmd, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi));
+		/* Create process succeeded when running under cmd. input stream needs to be processed */
+		process_input = TRUE;
+	}
+	
 	/* close unwanted handles*/
 	CloseHandle(child_pipe_read);
 	child_pipe_read = INVALID_HANDLE_VALUE;
 	child = pi.hProcess;
 	/* monitor child exist */
 	monitor_thread = CreateThread(NULL, 0, MonitorChild_nopty, NULL, 0, NULL);
-	if (monitor_thread == INVALID_HANDLE_VALUE)
+	if (IS_INVALID_HANDLE(monitor_thread))
 		goto cleanup;
 
 	/* disable Ctrl+C hander in this process*/
@@ -1167,10 +1212,15 @@ start_withno_pty(wchar_t *command)
 
 	/* process data from pipe_in and route appropriately */
 	while (1) {
-		char buf[128];
-		DWORD rd = 0, wr = 0, i = 0;
-		GOTO_CLEANUP_ON_FALSE(ReadFile(pipe_in, buf, 128, &rd, NULL));
+		rd = wr = i = 0;
+		GOTO_CLEANUP_ON_FALSE(ReadFile(pipe_in, buf, sizeof(buf)-1, &rd, NULL));
 
+		if (process_input == FALSE) {
+			/* write stream directly to child stdin */
+			GOTO_CLEANUP_ON_FALSE(WriteFile(child_pipe_write, buf, rd, &wr, NULL));
+			continue;
+		}
+		/* else - process input before routing it to child */
 		while (i < rd) {
 			/* skip arrow keys */
 			if ((rd - i >= 3) && (buf[i] == '\033') && (buf[i + 1] == '[') &&
@@ -1230,22 +1280,115 @@ start_withno_pty(wchar_t *command)
 		}
 	}
 cleanup:
-	if (child != INVALID_HANDLE_VALUE)
-		TerminateProcess(child, 0);
 
-	if (monitor_thread != INVALID_HANDLE_VALUE)
+	/* close child's stdin first */
+	if(!IS_INVALID_HANDLE(child_pipe_write))
+		CloseHandle(child_pipe_write);
+	
+	if (!IS_INVALID_HANDLE(monitor_thread)) {
 		WaitForSingleObject(monitor_thread, INFINITE);
-
-	if(pi.hProcess != INVALID_HANDLE_VALUE)
-		CloseHandle(pi.hProcess);
-
-	if (pi.hThread != INVALID_HANDLE_VALUE)
-		CloseHandle(pi.hThread);
-
-	if (cmd != NULL)
-		free(cmd);
-
+		CloseHandle(monitor_thread);
+	}		
+	if (!IS_INVALID_HANDLE(child))
+		TerminateProcess(child, 0);
+	
 	return child_exit_code;
+}
+
+#include <Shlobj.h>
+#include <Sddl.h>
+
+static void* xmalloc(size_t size) {
+	void* ptr;
+	if ((ptr = malloc(size)) == NULL) {
+		printf("out of memory");
+		exit(EXIT_FAILURE);
+	}
+	return ptr;
+}
+
+#define SET_USER_ENV(folder_id, evn_variable) do  {                \
+       if (SHGetKnownFolderPath(&folder_id,0,NULL,&path) == S_OK)              \
+        {                                                                       \
+                SetEnvironmentVariableW(evn_variable, path);                    \
+                CoTaskMemFree(path);                                            \
+       }                                                                        \
+} while (0)
+
+/* set user environment variables from user profile */
+static void setup_session_user_vars()	
+{
+	/* retrieve and set env variables. */
+	HKEY reg_key = 0;
+	wchar_t *path;
+	wchar_t name[256];
+	wchar_t *data = NULL, *data_expanded = NULL, *path_value = NULL, *to_apply;
+	DWORD type, name_chars = 256, data_chars = 0, data_expanded_chars = 0, required, i = 0;
+	LONG ret;
+
+	SET_USER_ENV(FOLDERID_LocalAppData, L"LOCALAPPDATA");
+	SET_USER_ENV(FOLDERID_Profile, L"USERPROFILE");
+	SET_USER_ENV(FOLDERID_RoamingAppData, L"APPDATA");
+
+	ret = RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE, &reg_key);
+	if (ret != ERROR_SUCCESS)
+		//error("Error retrieving user environment variables. RegOpenKeyExW returned %d", ret);
+		return;		
+	else while (1) {
+		to_apply = NULL;
+		required = data_chars * 2;
+		name_chars = 256;
+		ret = RegEnumValueW(reg_key, i++, name, &name_chars, 0, &type, (LPBYTE)data, &required);
+		if (ret == ERROR_NO_MORE_ITEMS)
+			break;
+		else if (ret == ERROR_MORE_DATA || required > data_chars * 2) {
+			if (data != NULL)
+				free(data);
+			data = xmalloc(required);
+			data_chars = required / 2;
+			i--;
+			continue;
+		}
+		else if (ret != ERROR_SUCCESS) 
+			break;
+
+		if (type == REG_SZ)
+			to_apply = data;
+		else if (type == REG_EXPAND_SZ) {
+			required = ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+			if (required > data_expanded_chars) {
+				if (data_expanded)
+					free(data_expanded);
+				data_expanded = xmalloc(required * 2);
+				data_expanded_chars = required;
+				ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+			}
+			to_apply = data_expanded;
+		}
+
+		if (_wcsicmp(name, L"PATH") == 0) {
+			if ((required = GetEnvironmentVariableW(L"PATH", NULL, 0)) != 0) {
+				/* "required" includes null term */
+				path_value = xmalloc((wcslen(to_apply) + 1 + required) * 2);
+				GetEnvironmentVariableW(L"PATH", path_value, required);
+				path_value[required - 1] = L';';
+				memcpy(path_value + required, to_apply, (wcslen(to_apply) + 1) * 2);
+				to_apply = path_value;
+			}
+
+		}
+		if (to_apply)
+			SetEnvironmentVariableW(name, to_apply);
+	}
+	if (reg_key)
+		RegCloseKey(reg_key);
+	if (data)
+		free(data);
+	if (data_expanded)
+		free(data_expanded);
+	if (path_value)
+		free(path_value);
+	RevertToSelf();
 }
 
 int b64_pton(char const *src, u_char *target, size_t targsize);
@@ -1265,6 +1408,8 @@ wmain(int ac, wchar_t **av)
 		printf("ssh-shellhost received unexpected input arguments");
 		return -1;
 	}
+
+	setup_session_user_vars();
 
 	/* decode cmd_b64*/
 	if (cmd_b64) {
