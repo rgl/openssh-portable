@@ -94,7 +94,7 @@ struct key_translation {
 	int in_key_len;
 } key_translation;
 
-/* All the substrings (Ex- "\x1b") should be in the end, otherwise ProcessIncomingKeys() will not work as expected */
+/* All the substrings should be in the end, otherwise ProcessIncomingKeys() will not work as expected */
 struct key_translation keys[] = {
     { L"\r",         VK_RETURN,  L'\r' , 0},
     { L"\b",         VK_BACK,    L'\b' , 0},
@@ -128,8 +128,7 @@ struct key_translation keys[] = {
     { L"\x1bOP",     VK_F1,       0 , 0 },
     { L"\x1bOQ",     VK_F2,       0 , 0 },
     { L"\x1bOR",     VK_F3,       0 , 0 },
-    { L"\x1bOS",     VK_F4,       0 , 0 }
-    //{ L"\x1b",       VK_ESCAPE,  L'\x1b' , 0}
+    { L"\x1bOS",     VK_F4,       0 , 0 }    
 };
 
 static SHORT lastX = 0;
@@ -728,7 +727,7 @@ ProcessEvent(void *p)
 
 		/* Compute buffer size */
 		bufferSize = coordBufSize.X * coordBufSize.Y;
-		if (bufferSize > MAX_EXPECTED_BUFFER_SIZE) {			
+		if (bufferSize > MAX_EXPECTED_BUFFER_SIZE) {
 			if (!bStartup) {
 				SendClearScreen(pipe_out);
 				ViewPortY = 0;
