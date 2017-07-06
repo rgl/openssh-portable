@@ -221,7 +221,7 @@ namespace MyLsaWrapper
 }
 '@
 $references = @()
-if(($psversiontable.PSEdition -ne $null) -and ($psversiontable.PSEdition -ieq "core"))
+if(($psversiontable.Containskey("psedition")) -and ($psversiontable.PSEdition -ieq "core"))
 {
     $references = "System.Security.Principal.Windows", "Microsoft.Win32.Primitives"
 }
