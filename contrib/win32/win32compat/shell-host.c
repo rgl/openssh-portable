@@ -300,10 +300,10 @@ ProcessCtrlSequence(wchar_t *buf, int buf_len)
 void 
 ProcessIncomingKeys(char * ansikey)
 {
-	wchar_t *buf = utf8_to_utf16(ansikey);
 	int buf_len = 0;
 	const int MAX_CTRL_SEQ_LEN = 7;
 	const wchar_t *ESC_SEQ = L"\x1b";
+	wchar_t *buf = utf8_to_utf16(ansikey);
 
 	if (!buf) {
 		printf("\nFailed to deserialize the client data, error:%d\n", GetLastError());
