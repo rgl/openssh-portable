@@ -51,7 +51,7 @@ get_user_root(struct agent_connection* con, HKEY *root)
 	*root = HKEY_LOCAL_MACHINE;
 	
 	if (con->client_type <= ADMIN_USER) {
-		if (ImpersonateNamedPipeClient(con->pipe_handle) == FALSE)
+		if (ImpersonateLoggedOnUser(con->client_impersonation_token) == FALSE)
 			return -1;
 		*root = NULL;
 		/* 
@@ -74,7 +74,7 @@ convert_blob(struct agent_connection* con, const char *blob, DWORD blen, char **
 	DATA_BLOB in, out;
 
 	if (con->client_type <= ADMIN_USER)
-		if (ImpersonateNamedPipeClient(con->pipe_handle) == FALSE)
+		if (ImpersonateLoggedOnUser(con->client_impersonation_token) == FALSE)
 			return -1;
 
 	in.cbData = blen;
@@ -332,7 +332,7 @@ process_remove_all(struct sshbuf* request, struct sshbuf* response, struct agent
 	int r = 0;
 
 	if (get_user_root(con, &user_root) != 0 ||
-	    RegOpenKeyExW(user_root, SSH_ROOT, 0, 
+	    RegOpenKeyExW(user_root, SSH_AGENT_ROOT, 0,
 		   DELETE | KEY_ENUMERATE_SUB_KEYS | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &root) != 0) {
 		goto done;
 	}

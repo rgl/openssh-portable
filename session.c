@@ -367,9 +367,9 @@ int register_child(void* child, unsigned long pid);
 
 int do_exec_windows(Session *s, const char *command, int pty) {
 	int pipein[2], pipeout[2], pipeerr[2], r;
-	char *exec_command = NULL, *progdir = w32_programdir(), *cmd = NULL, *shell_host = NULL, *command_b64 = NULL, *argp = NULL;
+	char *exec_command = NULL, *progdir = w32_programdir(), *cmd = NULL, *shell_host = NULL, *command_b64 = NULL;
 	wchar_t *exec_command_w = NULL, *pw_dir_w;
-	const char *sftp_exe = "sftp-server.exe";
+	const char *sftp_exe = "sftp-server.exe", *argp = NULL;
 	size_t command_b64_len = 0;
 	PROCESS_INFORMATION pi;
 	STARTUPINFOW si;
@@ -441,7 +441,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 				
 				// copy the arguments (if any).
 				if(strlen(command) > strlen(INTERNAL_SFTP_NAME)) {
-					argp = command + strlen(INTERNAL_SFTP_NAME);
+					argp = (char*)command + strlen(INTERNAL_SFTP_NAME);
 					memcpy(cmd, argp, strlen(argp)+1);
 				}
 			} else
@@ -477,6 +477,9 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		*cmd = '\0';
 	}
 
+	/* load user profile */
+	mm_load_profile(s->pw->pw_name, ((INT_PTR)s->authctxt->auth_token) & 0xffffffff);
+
 	/* start the process */
 	{
 		memset(&si, 0, sizeof(STARTUPINFO));
@@ -492,7 +495,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		si.hStdError = (HANDLE)w32_fd_to_handle(pipeerr[1]);
 		si.lpDesktop = NULL;
 
-		hToken = s->authctxt->methoddata;
+		hToken = s->authctxt->auth_token;
 
 		debug("Executing command: %s", exec_command);
 		UTF8_TO_UTF16_FATAL(exec_command_w, exec_command);
