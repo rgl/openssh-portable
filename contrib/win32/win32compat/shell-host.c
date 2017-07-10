@@ -1515,8 +1515,8 @@ wmain(int ac, wchar_t **av)
 		free(cmd_utf8);
 	}
 
-	ZeroMemory(system32_path, PATH_MAX);
-	if (!GetSystemDirectory(system32_path, sizeof(system32_path))) {
+	ZeroMemory(system32_path, sizeof(system32_path) / sizeof(wchar_t));
+	if (!GetSystemDirectory(system32_path, sizeof(system32_path)/sizeof(wchar_t))) {
 		printf("GetSystemDirectory failed");
 		exit(255);
 	}
