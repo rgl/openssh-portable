@@ -133,6 +133,7 @@ struct key_translation keys[] = {
 
 static SHORT lastX = 0;
 static SHORT lastY = 0;
+static wchar_t system32_path[PATH_MAX];
 static wchar_t cmd_exe_path[PATH_MAX];
 
 SHORT currentLine = 0;
@@ -1018,13 +1019,9 @@ cleanup:
 wchar_t *
 w32_cmd_path()
 {
-	ZeroMemory(cmd_exe_path, PATH_MAX);
-	if (!GetSystemDirectory(cmd_exe_path, sizeof(cmd_exe_path))) {
-		printf("GetSystemDirectory failed");
-		exit(255);
-	}
+	wcsncpy_s(cmd_exe_path, (sizeof(cmd_exe_path)/sizeof(wchar_t)), system32_path, wcslen(system32_path)+1);
+	wcscat_s(cmd_exe_path, (sizeof(cmd_exe_path)/sizeof(wchar_t)), L"\\cmd.exe");
 
-	wcscat_s(cmd_exe_path, sizeof(cmd_exe_path), L"\\cmd.exe");
 	return cmd_exe_path;
 }
 
@@ -1039,14 +1036,21 @@ start_with_pty(wchar_t *command)
 	DWORD dwStatus;
 	HANDLE hEventHook = NULL;
 	HMODULE hm_kernel32 = NULL, hm_user32 = NULL;
+	wchar_t kernel32_dll_path[PATH_MAX]={0,}, user32_dll_path[PATH_MAX]={0,};
 
 	if(cmd == NULL) {
 		printf("ssh-shellhost is out of memory");
 		exit(255);
 	}
-		
-	if ((hm_kernel32 = LoadLibraryW(L"kernel32.dll")) == NULL ||
-	    (hm_user32 = LoadLibraryW(L"user32.dll")) == NULL ||
+
+	wcsncpy_s(kernel32_dll_path, (sizeof(kernel32_dll_path)/sizeof(wchar_t)), system32_path, wcslen(system32_path)+1);
+	wcscat_s(kernel32_dll_path, (sizeof(kernel32_dll_path)/sizeof(wchar_t)), L"\\kernel32.dll");
+
+	wcsncpy_s(user32_dll_path, (sizeof(user32_dll_path)/sizeof(wchar_t)), system32_path, wcslen(system32_path)+1);
+	wcscat_s(user32_dll_path, (sizeof(user32_dll_path)/sizeof(wchar_t)), L"\\user32.dll");
+
+	if ((hm_kernel32 = LoadLibraryW(kernel32_dll_path)) == NULL ||
+	    (hm_user32 = LoadLibraryW(user32_dll_path)) == NULL ||
 	    (__SetCurrentConsoleFontEx = (__t_SetCurrentConsoleFontEx)GetProcAddress(hm_kernel32, "SetCurrentConsoleFontEx")) == NULL ||
 	    (__UnhookWinEvent = (__t_UnhookWinEvent)GetProcAddress(hm_user32, "UnhookWinEvent")) == NULL ||
 	    (__SetWinEventHook = (__t_SetWinEventHook)GetProcAddress(hm_user32, "SetWinEventHook")) == NULL) {
@@ -1509,6 +1513,12 @@ wmain(int ac, wchar_t **av)
 		}
 		free(cmd_b64_utf8);
 		free(cmd_utf8);
+	}
+
+	ZeroMemory(system32_path, PATH_MAX);
+	if (!GetSystemDirectory(system32_path, sizeof(system32_path))) {
+		printf("GetSystemDirectory failed");
+		exit(255);
 	}
 
 	if (pty_requested)
