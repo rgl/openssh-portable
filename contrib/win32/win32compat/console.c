@@ -140,7 +140,7 @@ ConEnterRawMode(DWORD OutputHandle, BOOL fSmartInit)
 		SavedViewRect = csbi.srWindow;
 		debug("console doesn't support the ansi parsing");
 	} else {
-		ConMoveCursorTop(csbi);
+		ConSaveViewRect();
 		debug("console supports the ansi parsing");
 	}		
 
@@ -1571,16 +1571,17 @@ ConSaveWindowsState()
 }
 
 void
-ConMoveCursorTop(CONSOLE_SCREEN_BUFFER_INFO csbi)
+ConMoveCursorTopOfVisibleWindow()
 {
-	/* Windows server at first sends the "cls" after the connection is established.
-	 * Since we don't want to loose any data on the console, we would like to scroll down
-	 * the visible window.
-	 */
-	int offset = csbi.dwCursorPosition.Y - csbi.srWindow.Top;
-	ConMoveVisibleWindow(offset);
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	int offset;
 
-	ConSaveViewRect();
+	if (GetConsoleScreenBufferInfo(hOutputConsole, &csbi)) {
+		offset = csbi.dwCursorPosition.Y - csbi.srWindow.Top;
+		ConMoveVisibleWindow(offset);
+
+		ConSaveViewRect();
+	}
 }
 
 HANDLE

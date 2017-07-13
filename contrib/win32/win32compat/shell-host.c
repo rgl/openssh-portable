@@ -97,6 +97,7 @@ struct key_translation {
 /* All the substrings should be in the end, otherwise ProcessIncomingKeys() will not work as expected */
 struct key_translation keys[] = {
     { L"\r",         VK_RETURN,  L'\r' , 0},
+    { L"\n",         VK_RETURN,  L'\r' , 0 },
     { L"\b",         VK_BACK,    L'\b' , 0},
     { L"\x7f",       VK_BACK,    L'\b' , 0},
     { L"\t",         VK_TAB,     L'\t' , 0},
