@@ -85,7 +85,7 @@
 
 typedef void *  SCREEN_HANDLE;
 
-int ConEnterRawMode(DWORD OutputHandle, BOOL fSmartInit);
+int ConEnterRawMode();
 int ConUnInitWithRestore();
 int ConExitRawMode();
 BOOL ConIsRedirected(HANDLE hInput);

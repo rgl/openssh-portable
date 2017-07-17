@@ -84,11 +84,30 @@ ReadThread(_In_ LPVOID lpParameter)
 	debug5("TermRead thread, io:%p", pio);
 	memset(&read_status, 0, sizeof(read_status));
 	if (FILETYPE(pio) == FILE_TYPE_CHAR) {
-		while (nBytesReturned == 0) {
-			nBytesReturned = ReadConsoleForTermEmul(WINHANDLE(pio),
-				pio->read_details.buf, pio->read_details.buf_size);
+		if (in_raw_mode) {
+			while (nBytesReturned == 0) {
+				nBytesReturned = ReadConsoleForTermEmul(WINHANDLE(pio),
+					pio->read_details.buf, pio->read_details.buf_size);
+			}
+			read_status.transferred = nBytesReturned;
+		}  else {
+			if (!ReadFile(WINHANDLE(pio), pio->read_details.buf,
+				pio->read_details.buf_size, &read_status.transferred, NULL)) {
+				read_status.error = GetLastError();
+				debug("ReadThread - ReadFile failed %d, io:%p", GetLastError(), pio);
+			}
+
+			char *p = NULL;
+			if (p = strstr(pio->read_details.buf, "\r\n"))
+				*p++ = '\n';
+			else if (p = strstr(pio->read_details.buf, "\r"))
+				*p++ = '\n';
+
+			if (p) {
+				*p = '\0';
+				pio->read_details.buf_size = (DWORD)strlen(p);
+			}
 		}
-		read_status.transferred = nBytesReturned;
 	} else {
 		if (!ReadFile(WINHANDLE(pio), pio->read_details.buf,
 		    pio->read_details.buf_size, &read_status.transferred, NULL)) {
@@ -221,7 +240,7 @@ syncio_close(struct w32_io* pio)
 	/* If io is pending, let worker threads exit. */
 	if (pio->read_details.pending) {
 		/* For console - the read thread is blocked so terminate it. */
-		if (FILETYPE(pio) == FILE_TYPE_CHAR)
+		if (FILETYPE(pio) == FILE_TYPE_CHAR && in_raw_mode)
 			TerminateThread(pio->read_overlapped.hEvent, 0);
 		else
 			WaitForSingleObject(pio->read_overlapped.hEvent, INFINITE);

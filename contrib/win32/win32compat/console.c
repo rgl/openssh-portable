@@ -42,7 +42,8 @@
 #include "ansiprsr.h"
 
 HANDLE	hOutputConsole = NULL;
-DWORD	dwSavedAttributes = 0;
+DWORD	stdin_dwSavedAttributes = 0;
+DWORD	stdout_dwSavedAttributes = 0;
 WORD	wStartingAttributes = 0;
 
 int ScreenX;
@@ -73,7 +74,7 @@ char *consoleTitle = "OpenSSH SSH client";
 
 /* Used to enter the raw mode */
 int 
-ConEnterRawMode(DWORD OutputHandle, BOOL fSmartInit)
+ConEnterRawMode()
 {
 	DWORD dwAttributes = 0;
 	DWORD dwRet = 0;
@@ -81,14 +82,14 @@ ConEnterRawMode(DWORD OutputHandle, BOOL fSmartInit)
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
 	static bool bFirstConInit = true;
 
-	hOutputConsole = GetStdHandle(OutputHandle);
+	hOutputConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 	if (hOutputConsole == INVALID_HANDLE_VALUE) {
 		dwRet = GetLastError();
 		error("GetStdHandle on OutputHandle failed with %d\n", dwRet);
 		return dwRet;
 	}
 
-	if (!GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &dwSavedAttributes)) {
+	if (!GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &stdin_dwSavedAttributes)) {
 		dwRet = GetLastError();
 		error("GetConsoleMode on STD_INPUT_HANDLE failed with %d\n", dwRet);
 		return dwRet;
@@ -96,7 +97,7 @@ ConEnterRawMode(DWORD OutputHandle, BOOL fSmartInit)
 
 	SetConsoleTitle(consoleTitle);
 
-	dwAttributes = dwSavedAttributes;
+	dwAttributes = stdin_dwSavedAttributes;
 	dwAttributes &= ~(ENABLE_LINE_INPUT |
 		ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT | ENABLE_MOUSE_INPUT);
 	dwAttributes |= ENABLE_WINDOW_INPUT;
@@ -107,13 +108,14 @@ ConEnterRawMode(DWORD OutputHandle, BOOL fSmartInit)
 		return dwRet;
 	}
 
-	if (!GetConsoleMode(hOutputConsole, &dwAttributes)) {
+	if (!GetConsoleMode(hOutputConsole, &stdout_dwSavedAttributes)) {
 		dwRet = GetLastError();
 		error("GetConsoleMode on hOutputConsole failed with %d\n", dwRet);
 		return dwRet;
 
 	}
 
+	dwAttributes = stdout_dwSavedAttributes;
 	dwAttributes |= (DWORD)ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 
 	char *envValue = NULL;
@@ -158,12 +160,9 @@ ConEnterRawMode(DWORD OutputHandle, BOOL fSmartInit)
 int 
 ConExitRawMode()
 {
-	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
-	in_raw_mode = 0;
-	if (hOutputConsole == NULL || !GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
-		return 0;
-	
-	SetConsoleMode(hOutputConsole, dwSavedAttributes);
+	SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), stdin_dwSavedAttributes);
+	SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), stdout_dwSavedAttributes);
+
 
 	return 0;
 }
@@ -182,7 +181,7 @@ ConUnInitWithRestore()
 	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
 		return 0;
 
-	SetConsoleMode(hOutputConsole, dwSavedAttributes);
+	SetConsoleMode(hOutputConsole, stdin_dwSavedAttributes);
 	Coord = consoleInfo.dwCursorPosition;
 	Coord.X = 0;
 	DWORD dwNumChar = (consoleInfo.dwSize.Y - consoleInfo.dwCursorPosition.Y) * consoleInfo.dwSize.X;
