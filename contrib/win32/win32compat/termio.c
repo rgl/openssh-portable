@@ -50,6 +50,7 @@
 #define TERM_IO_BUF_SIZE 2048
 
 extern int in_raw_mode;
+BOOL isFirstTime = TRUE;
 
 struct io_status {
 	DWORD to_transfer;
@@ -91,6 +92,19 @@ ReadThread(_In_ LPVOID lpParameter)
 			}
 			read_status.transferred = nBytesReturned;
 		}  else {
+			if (isFirstTime) {
+				isFirstTime = false;
+
+				DWORD dwAttributes;
+				if (!GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &dwAttributes))
+					error("GetConsoleMode on STD_INPUT_HANDLE failed with %d\n", GetLastError());
+				
+				dwAttributes |= (ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT);
+
+				if (!SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), dwAttributes))
+					error("SetConsoleMode on STD_INPUT_HANDLE failed with %d\n", GetLastError());
+			}
+
 			if (!ReadFile(WINHANDLE(pio), pio->read_details.buf,
 				pio->read_details.buf_size, &read_status.transferred, NULL)) {
 				read_status.error = GetLastError();
@@ -105,7 +119,8 @@ ReadThread(_In_ LPVOID lpParameter)
 
 			if (p) {
 				*p = '\0';
-				pio->read_details.buf_size = (DWORD)strlen(p);
+				pio->read_details.buf_size = (DWORD)strlen(pio->read_details.buf);
+				read_status.transferred = pio->read_details.buf_size;
 			}
 		}
 	} else {
