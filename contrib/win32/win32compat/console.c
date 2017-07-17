@@ -163,7 +163,6 @@ ConExitRawMode()
 	SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), stdin_dwSavedAttributes);
 	SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), stdout_dwSavedAttributes);
 
-
 	return 0;
 }
 
@@ -181,7 +180,8 @@ ConUnInitWithRestore()
 	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
 		return 0;
 
-	SetConsoleMode(hOutputConsole, stdin_dwSavedAttributes);
+	SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), stdin_dwSavedAttributes);
+	SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), stdout_dwSavedAttributes);
 	Coord = consoleInfo.dwCursorPosition;
 	Coord.X = 0;
 	DWORD dwNumChar = (consoleInfo.dwSize.Y - consoleInfo.dwCursorPosition.Y) * consoleInfo.dwSize.X;
