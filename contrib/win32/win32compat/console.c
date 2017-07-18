@@ -73,7 +73,7 @@ int in_raw_mode = 0;
 char *consoleTitle = "OpenSSH SSH client";
 
 /* Used to enter the raw mode */
-int 
+void 
 ConEnterRawMode()
 {
 	DWORD dwAttributes = 0;
@@ -86,13 +86,13 @@ ConEnterRawMode()
 	if (hOutputConsole == INVALID_HANDLE_VALUE) {
 		dwRet = GetLastError();
 		error("GetStdHandle on OutputHandle failed with %d\n", dwRet);
-		return dwRet;
+		return;
 	}
 
 	if (!GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &stdin_dwSavedAttributes)) {
 		dwRet = GetLastError();
 		error("GetConsoleMode on STD_INPUT_HANDLE failed with %d\n", dwRet);
-		return dwRet;
+		return;
 	}
 
 	SetConsoleTitle(consoleTitle);
@@ -105,14 +105,13 @@ ConEnterRawMode()
 	if (!SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), dwAttributes)) { /* Windows NT */
 		dwRet = GetLastError();
 		error("SetConsoleMode on STD_INPUT_HANDLE failed with %d\n", dwRet);
-		return dwRet;
+		return;
 	}
 
 	if (!GetConsoleMode(hOutputConsole, &stdout_dwSavedAttributes)) {
 		dwRet = GetLastError();
 		error("GetConsoleMode on hOutputConsole failed with %d\n", dwRet);
-		return dwRet;
-
+		return;
 	}
 
 	dwAttributes = stdout_dwSavedAttributes;
@@ -152,22 +151,18 @@ ConEnterRawMode()
 	ScrollBottom = ConVisibleWindowHeight();		
 	
 	in_raw_mode = 1;
-
-	return 0;
 }
 
 /* Used to Uninitialize the Console */
-int 
+void 
 ConExitRawMode()
 {
 	SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), stdin_dwSavedAttributes);
 	SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), stdout_dwSavedAttributes);
-
-	return 0;
 }
 
 /* Used to exit the raw mode */
-int 
+void 
 ConUnInitWithRestore()
 {
 	DWORD dwWritten;
@@ -175,10 +170,10 @@ ConUnInitWithRestore()
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
 	if (hOutputConsole == NULL)
-		return 0;
+		return;
 
 	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
-		return 0;
+		return;
 
 	SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), stdin_dwSavedAttributes);
 	SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), stdout_dwSavedAttributes);
@@ -188,7 +183,6 @@ ConUnInitWithRestore()
 	FillConsoleOutputCharacter(hOutputConsole, ' ', dwNumChar, Coord, &dwWritten);
 	FillConsoleOutputAttribute(hOutputConsole, wStartingAttributes, dwNumChar, Coord, &dwWritten);
 	SetConsoleTextAttribute(hOutputConsole, wStartingAttributes);
-	return 0;
 }
 
 BOOL 

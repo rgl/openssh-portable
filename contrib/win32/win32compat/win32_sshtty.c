@@ -7,7 +7,6 @@
 static struct termios _saved_tio;
 static int _in_raw_mode = 0;
 
-
 /* 
  * TTY raw mode routines for Windows 
  */
