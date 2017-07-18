@@ -72,9 +72,8 @@ processBuffer(HANDLE handle, char *buf, size_t len, unsigned char **respbuf, siz
 			 * There is a bug in the conhost which causes the visible window data to loose so to
 			 * mitigate that issue we need to first move the visible window so that the cursor is at the top of the visible window.
 			 */
-			if (strstr(buf, clsSeq)) {
+			if (strstr(buf, clsSeq))
 				ConMoveCursorTopOfVisibleWindow();
-			}
 		}
 
 		if(len >= applicationModeSeqLen && strstr(buf, applicationModeSeq))
