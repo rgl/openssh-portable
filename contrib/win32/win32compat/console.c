@@ -115,7 +115,7 @@ ConEnterRawMode()
 	}
 
 	dwAttributes = stdout_dwSavedAttributes;
-	dwAttributes |= (DWORD)ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+	dwAttributes |= (DWORD)ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
 
 	char *envValue = NULL;
 	_dupenv_s(&envValue, NULL, "SSH_TERM_CONHOST_PARSER");

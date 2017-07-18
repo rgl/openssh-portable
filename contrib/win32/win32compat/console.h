@@ -83,6 +83,10 @@
 #define ENABLE_VIRTUAL_TERMINAL_PROCESSING  0x4
 #endif
 
+#ifndef DISABLE_NEWLINE_AUTO_RETURN
+#define DISABLE_NEWLINE_AUTO_RETURN 0x8
+#endif
+
 typedef void *  SCREEN_HANDLE;
 
 void ConEnterRawMode();
