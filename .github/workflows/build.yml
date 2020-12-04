@@ -1,0 +1,27 @@
+name: Build
+on: [push]
+jobs:
+  build:
+    name: Build
+    # see https://github.com/actions/virtual-environments/blob/main/images/win/Windows2016-Readme.md
+    runs-on: windows-2016
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.0.2
+        with:
+          vs-version: '[15.9,16.0)' # VS 2017.
+      - name: Build
+        run: |
+          Import-Module .\contrib\win32\openssh\OpenSSHBuildHelper.psm1 -Force
+          Start-OpenSSHBuild -Verbose -Configuration Release -NativeHostArch x64
+      - name: Package
+        run: |
+          Import-Module .\contrib\win32\openssh\OpenSSHBuildHelper.psm1 -Force
+          Start-OpenSSHPackage -Verbose -Configuration Release -NativeHostArch x64
+      - name: Archive
+        uses: actions/upload-artifact@v2
+        with:
+          name: openssh-portable-artifacts
+          path: |
+            bin/x64/Release/*.zip
